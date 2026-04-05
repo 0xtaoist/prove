@@ -180,11 +180,24 @@ pub struct RegisterTickerReuse<'info> {
 
 #[derive(Accounts)]
 pub struct DeactivateTicker<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"ticker", ticker_entry.ticker.as_bytes()],
+        bump = ticker_entry.bump,
+    )]
     pub ticker_entry: Account<'info, TickerEntry>,
 
-    /// CHECK: Permissionless crank, anyone can call.
-    pub cranker: Signer<'info>,
+    /// Only the registry authority can deactivate tickers.
+    #[account(
+        constraint = authority.key() == registry_config.authority @ TickerError::Unauthorized,
+    )]
+    pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [b"registry_config"],
+        bump = registry_config.bump,
+    )]
+    pub registry_config: Account<'info, RegistryConfig>,
 }
 
 // ---------------------------------------------------------------------------
@@ -254,4 +267,7 @@ pub enum TickerError {
 
     #[msg("Arithmetic overflow")]
     MathOverflow,
+
+    #[msg("Signer is not the registry authority")]
+    Unauthorized,
 }

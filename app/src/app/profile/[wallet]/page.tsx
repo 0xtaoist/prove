@@ -1,12 +1,15 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ProveScoreRing } from "@/components/ProveScoreRing";
 import styles from "./page.module.css";
 
 /* ── Helpers ── */
 
+const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 function shortenAddress(addr: string): string {
-  if (addr.length <= 10) return addr;
+  if (addr.length <= 8) return addr;
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
@@ -103,6 +106,7 @@ export default async function ProfilePage({
   params: Promise<{ wallet: string }>;
 }) {
   const { wallet } = await params;
+  if (!BASE58_RE.test(wallet)) notFound();
   const data = getProfileData(wallet);
 
   return (

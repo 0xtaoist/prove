@@ -1,13 +1,16 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { QuestCard, type QuestData } from "@/components/QuestCard";
 import { TradeWidget } from "./TradeWidget";
 import styles from "./page.module.css";
 
 /* ── Helpers ── */
 
+const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 function shortenAddress(addr: string): string {
-  if (addr.length <= 10) return addr;
+  if (addr.length <= 8) return addr;
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
@@ -126,6 +129,7 @@ export default async function TokenPage({
   params: Promise<{ mint: string }>;
 }) {
   const { mint } = await params;
+  if (!BASE58_RE.test(mint)) notFound();
   const data = getTokenData(mint);
   const isPositive = data.change24h >= 0;
 

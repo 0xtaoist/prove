@@ -574,7 +574,11 @@ pub struct CreatePool<'info> {
 
 #[derive(Accounts)]
 pub struct EnableTrading<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool", pool.mint.as_ref()],
+        bump = pool.bump,
+    )]
     pub pool: Account<'info, Pool>,
 }
 

@@ -1,32 +1,28 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "./db";
+import { serializeBigInts, isValidSolanaAddress, errorResponse } from "@prove/common";
 
 const router = Router();
 
-// Helper: convert BigInt fields to strings for JSON serialization
-function serializeBigInts(obj: unknown): unknown {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === "bigint") return obj.toString();
-  if (Array.isArray(obj)) return obj.map(serializeBigInts);
-  if (typeof obj === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      result[key] = serializeBigInts(value);
-    }
-    return result;
-  }
-  return obj;
-}
-
 function json(res: Response, data: unknown, status = 200): void {
   res.status(status).json(serializeBigInts(data));
+}
+
+/** Validate a :mint or :wallet route param as a Solana address. Returns the address or null (after sending 400). */
+function requireSolanaAddress(req: Request, res: Response, param: string): string | null {
+  const value = req.params[param];
+  if (!value || !isValidSolanaAddress(value)) {
+    res.status(400).json(errorResponse(`Invalid Solana address for parameter '${param}'`));
+    return null;
+  }
+  return value;
 }
 
 // ─── GET /api/feed ──────────────────────────────────────────
 router.get("/api/feed", async (req: Request, res: Response) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // Get tokens that are actively trading
@@ -112,15 +108,18 @@ router.get("/api/feed", async (req: Request, res: Response) => {
     json(res, { tokens: filtered, total: filtered.length });
   } catch (err) {
     console.error("[api] GET /api/feed error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
 // ─── GET /api/auction/:mint ─────────────────────────────────
 router.get("/api/auction/:mint", async (req: Request, res: Response) => {
   try {
+    const mint = requireSolanaAddress(req, res, "mint");
+    if (!mint) return;
+
     const auction = await prisma.auction.findUnique({
-      where: { mint: req.params.mint },
+      where: { mint },
       include: {
         commitments: { orderBy: { createdAt: "desc" } },
         stake: true,
@@ -129,14 +128,14 @@ router.get("/api/auction/:mint", async (req: Request, res: Response) => {
     });
 
     if (!auction) {
-      res.status(404).json({ error: "Auction not found" });
+      res.status(404).json(errorResponse("Auction not found"));
       return;
     }
 
     json(res, auction);
   } catch (err) {
     console.error("[api] GET /api/auction/:mint error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
@@ -152,14 +151,15 @@ router.get("/api/auctions/active", async (_req: Request, res: Response) => {
     json(res, auctions);
   } catch (err) {
     console.error("[api] GET /api/auctions/active error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
 // ─── GET /api/token/:mint ───────────────────────────────────
 router.get("/api/token/:mint", async (req: Request, res: Response) => {
   try {
-    const mint = req.params.mint;
+    const mint = requireSolanaAddress(req, res, "mint");
+    if (!mint) return;
 
     const auction = await prisma.auction.findUnique({
       where: { mint },
@@ -167,7 +167,7 @@ router.get("/api/token/:mint", async (req: Request, res: Response) => {
     });
 
     if (!auction) {
-      res.status(404).json({ error: "Token not found" });
+      res.status(404).json(errorResponse("Token not found"));
       return;
     }
 
@@ -205,14 +205,15 @@ router.get("/api/token/:mint", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("[api] GET /api/token/:mint error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
 // ─── GET /api/profile/:wallet ───────────────────────────────
 router.get("/api/profile/:wallet", async (req: Request, res: Response) => {
   try {
-    const wallet = req.params.wallet;
+    const wallet = requireSolanaAddress(req, res, "wallet");
+    if (!wallet) return;
 
     const [proveScore, commitments, holdings, recentSwaps] = await Promise.all([
       prisma.proveScore.findUnique({ where: { wallet } }),
@@ -240,14 +241,15 @@ router.get("/api/profile/:wallet", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("[api] GET /api/profile/:wallet error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
 // ─── GET /api/creator/:wallet ───────────────────────────────
 router.get("/api/creator/:wallet", async (req: Request, res: Response) => {
   try {
-    const wallet = req.params.wallet;
+    const wallet = requireSolanaAddress(req, res, "wallet");
+    if (!wallet) return;
 
     const [tokens, fees, stakes] = await Promise.all([
       prisma.auction.findMany({
@@ -275,22 +277,25 @@ router.get("/api/creator/:wallet", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("[api] GET /api/creator/:wallet error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
 // ─── GET /api/quests/:mint ──────────────────────────────────
 router.get("/api/quests/:mint", async (req: Request, res: Response) => {
   try {
+    const mint = requireSolanaAddress(req, res, "mint");
+    if (!mint) return;
+
     const quests = await prisma.quest.findMany({
-      where: { auctionMint: req.params.mint },
+      where: { auctionMint: mint },
       orderBy: { createdAt: "asc" },
     });
 
     json(res, quests);
   } catch (err) {
     console.error("[api] GET /api/quests/:mint error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(errorResponse("Internal server error"));
   }
 });
 
