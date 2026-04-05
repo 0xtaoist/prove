@@ -47,7 +47,7 @@ export function fetchFeed(): Promise<FeedToken[]> {
 
 /** Fetch a single auction by mint address. */
 export function fetchAuction(mint: string): Promise<Auction> {
-  return apiFetch<Auction>(`/auctions/${mint}`);
+  return apiFetch<Auction>(`/auctions/${encodeURIComponent(mint)}`);
 }
 
 /** Fetch all currently active auctions. */
@@ -57,20 +57,20 @@ export function fetchActiveAuctions(): Promise<Auction[]> {
 
 /** Fetch token stats by mint address. */
 export function fetchToken(mint: string): Promise<TokenStats> {
-  return apiFetch<TokenStats>(`/tokens/${mint}`);
+  return apiFetch<TokenStats>(`/tokens/${encodeURIComponent(mint)}`);
 }
 
 /** Fetch a user's prove profile / score. */
 export function fetchProfile(wallet: string): Promise<ProveScore> {
-  return apiFetch<ProveScore>(`/profiles/${wallet}`);
+  return apiFetch<ProveScore>(`/profiles/${encodeURIComponent(wallet)}`);
 }
 
 /** Fetch creator dashboard data. */
 export function fetchCreator(wallet: string): Promise<CreatorDashboard> {
-  return apiFetch<CreatorDashboard>(`/creators/${wallet}`);
+  return apiFetch<CreatorDashboard>(`/creators/${encodeURIComponent(wallet)}`);
 }
 
 /** Fetch quests for a token. */
 export function fetchQuests(mint: string): Promise<Quest[]> {
-  return apiFetch<Quest[]>(`/tokens/${mint}/quests`);
+  return apiFetch<Quest[]>(`/tokens/${encodeURIComponent(mint)}/quests`);
 }

@@ -2,10 +2,11 @@ import { prisma } from "./db";
 
 const VERIFICATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-export function startVerificationLoop(): void {
+export function startVerificationLoop(): NodeJS.Timeout {
   console.log("[verifier] Starting quest verification loop (every 5 minutes)");
+  // Run once immediately, then on interval
   runVerification();
-  setInterval(runVerification, VERIFICATION_INTERVAL_MS);
+  return setInterval(runVerification, VERIFICATION_INTERVAL_MS);
 }
 
 async function runVerification(): Promise<void> {

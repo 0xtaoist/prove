@@ -24,9 +24,13 @@ export function serializeBigInts(obj: unknown): unknown {
  * Returns true if valid, false otherwise.
  */
 export function isValidSolanaAddress(address: string): boolean {
+  if (typeof address !== "string" || address.length < 32 || address.length > 44) {
+    return false;
+  }
   try {
     const key = new PublicKey(address);
-    return PublicKey.isOnCurve(key.toBuffer()) || key.toBase58() === address;
+    // Round-trip check: ensures the input is canonical base58 for a 32-byte key
+    return key.toBase58() === address;
   } catch {
     return false;
   }

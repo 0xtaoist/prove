@@ -119,6 +119,7 @@ export async function generateMetadata({
   params: Promise<{ mint: string }>;
 }): Promise<Metadata> {
   const { mint } = await params;
+  if (!BASE58_RE.test(mint)) return { title: "Not Found — PROVE" };
   const data = getTokenData(mint);
   return { title: `${data.ticker} — PROVE` };
 }

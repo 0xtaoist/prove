@@ -6,8 +6,10 @@ const LAMPORTS_PER_SOL = 1_000_000_000n;
  */
 export function formatSol(lamports: bigint | string): string {
   const val = typeof lamports === "string" ? BigInt(lamports) : lamports;
-  const whole = val / LAMPORTS_PER_SOL;
-  const frac = val % LAMPORTS_PER_SOL;
+  const negative = val < 0n;
+  const abs = negative ? -val : val;
+  const whole = abs / LAMPORTS_PER_SOL;
+  const frac = abs % LAMPORTS_PER_SOL;
 
   // Convert fractional part to a decimal string with 9 digits
   const fracStr = frac.toString().padStart(9, "0");
@@ -16,7 +18,7 @@ export function formatSol(lamports: bigint | string): string {
   const decimals = whole < 10n ? 4 : 2;
   const trimmed = fracStr.slice(0, decimals);
 
-  return `${whole}.${trimmed}`;
+  return `${negative ? "-" : ""}${whole}.${trimmed}`;
 }
 
 /**

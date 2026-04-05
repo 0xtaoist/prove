@@ -97,6 +97,7 @@ export async function generateMetadata({
   params: Promise<{ wallet: string }>;
 }): Promise<Metadata> {
   const { wallet } = await params;
+  if (!BASE58_RE.test(wallet)) return { title: "Not Found — PROVE" };
   return { title: `Profile ${shortenAddress(wallet)} — PROVE` };
 }
 

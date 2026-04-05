@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent, type ChangeEvent } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useConnection } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import styles from "./page.module.css";
 
 interface FormData {

@@ -111,30 +111,24 @@ pub mod fee_router {
 
         require!(withdrawable > 0, FeeRouterError::NothingToWithdraw);
 
-        let mint_key = fee_config.mint;
-        let escrow_bump = ctx.accounts.fee_escrow.bump;
-        let seeds: &[&[u8]] = &[
-            b"fee_escrow",
-            mint_key.as_ref(),
-            &[escrow_bump],
-        ];
-
-        // Transfer from fee_escrow PDA to creator wallet
-        system_program::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.system_program.to_account_info(),
-                system_program::Transfer {
-                    from: ctx.accounts.fee_escrow.to_account_info(),
-                    to: ctx.accounts.creator.to_account_info(),
-                },
-                &[seeds],
-            ),
-            withdrawable,
-        )?;
-
+        // Update state BEFORE transfer to prevent reentrancy.
         let fee_config = &mut ctx.accounts.fee_config;
         fee_config.total_creator_withdrawn = fee_config
             .total_creator_withdrawn
+            .checked_add(withdrawable)
+            .ok_or(FeeRouterError::MathOverflow)?;
+
+        // Transfer from fee_escrow PDA to creator wallet via lamport manipulation.
+        // The fee_escrow is owned by this program, so system_program::transfer cannot be used.
+        let escrow_info = ctx.accounts.fee_escrow.to_account_info();
+        let creator_info = ctx.accounts.creator.to_account_info();
+
+        **escrow_info.try_borrow_mut_lamports()? = escrow_info
+            .lamports()
+            .checked_sub(withdrawable)
+            .ok_or(FeeRouterError::MathOverflow)?;
+        **creator_info.try_borrow_mut_lamports()? = creator_info
+            .lamports()
             .checked_add(withdrawable)
             .ok_or(FeeRouterError::MathOverflow)?;
 
@@ -228,8 +222,6 @@ pub struct WithdrawCreatorFees<'info> {
         bump = fee_escrow.bump,
     )]
     pub fee_escrow: Account<'info, FeeEscrow>,
-
-    pub system_program: Program<'info, System>,
 }
 
 // ---------------------------------------------------------------------------

@@ -6,9 +6,11 @@ const SCORE_INTERVAL = HOUR_MS;
 const BENEFITS_CAP = 70;
 const DECAY_PER_WEEK = 2;
 
+let timer: NodeJS.Timeout | undefined;
+
 export function startScoreCalculator(): NodeJS.Timeout {
   console.log("[score] Starting score calculator (runs every hour)");
-  const timer = setInterval(calculateAllScores, SCORE_INTERVAL);
+  timer = setInterval(calculateAllScores, SCORE_INTERVAL);
   // Run once on startup after a short delay
   setTimeout(calculateAllScores, 5_000);
   return timer;
