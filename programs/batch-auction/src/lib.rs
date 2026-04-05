@@ -375,7 +375,7 @@ pub struct CreateAuction<'info> {
     /// The SPL token mint for this auction. The auction PDA must be the mint authority.
     #[account(
         mut,
-        constraint = mint.mint_authority.unwrap() == auction.key() @ BatchAuctionError::InvalidMintAuthority,
+        constraint = mint.mint_authority.map_or(false, |a| a == auction.key()) @ BatchAuctionError::InvalidMintAuthority,
         constraint = mint.supply == 0 @ BatchAuctionError::MintAlreadyHasSupply,
     )]
     pub mint: Account<'info, Mint>,
