@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("PAMM1111111111111111111111111111111111111111");
+declare_id!("PAMM111111111111111111111111111111111111111");
 
 const TRADING_COOLDOWN_SECONDS: i64 = 30;
 const FEE_BPS: u64 = 100; // 1% = 100 basis points
@@ -56,11 +56,8 @@ pub mod prove_amm {
 
         // Mint initial LP tokens to creator
         let mint_key = ctx.accounts.mint.key();
-        let seeds = &[
-            b"pool".as_ref(),
-            mint_key.as_ref(),
-            &[ctx.bumps.pool],
-        ];
+        let bump = ctx.bumps.pool;
+        let seeds = &[b"pool".as_ref(), mint_key.as_ref(), &[bump]];
         let signer_seeds = &[&seeds[..]];
 
         token::mint_to(
@@ -89,7 +86,7 @@ pub mod prove_amm {
         pool.trading_enabled = false;
         pool.created_at = clock.unix_timestamp;
         pool.creator = ctx.accounts.creator.key();
-        pool.bump = ctx.bumps.pool;
+        pool.bump = bump;
 
         msg!(
             "Pool created: mint={}, sol={}, tokens={}, lp={}",
@@ -134,9 +131,14 @@ pub mod prove_amm {
         is_buy: bool,
         min_amount_out: u64,
     ) -> Result<()> {
-        let pool = &mut ctx.accounts.pool;
+        // Read all needed pool state up front before any mutable borrow
+        let pool_trading_enabled = ctx.accounts.pool.trading_enabled;
+        let pool_mint = ctx.accounts.pool.mint;
+        let pool_bump = ctx.accounts.pool.bump;
+        let pool_token_reserve = ctx.accounts.pool.token_reserve;
+        let pool_sol_reserve = ctx.accounts.pool.sol_reserve;
 
-        require!(pool.trading_enabled, AmmError::TradingNotEnabled);
+        require!(pool_trading_enabled, AmmError::TradingNotEnabled);
         require!(amount_in > 0, AmmError::ZeroAmount);
 
         // Calculate fee: 1% of input
@@ -152,8 +154,8 @@ pub mod prove_amm {
         require!(amount_after_fee > 0, AmmError::ZeroAmount);
 
         // k = token_reserve * sol_reserve (u128 to prevent overflow)
-        let k = (pool.token_reserve as u128)
-            .checked_mul(pool.sol_reserve as u128)
+        let k = (pool_token_reserve as u128)
+            .checked_mul(pool_sol_reserve as u128)
             .ok_or(AmmError::MathOverflow)?;
 
         let amount_out: u64;
@@ -172,7 +174,7 @@ pub mod prove_amm {
                 amount_in,
             )?;
 
-            let new_sol_reserve = (pool.sol_reserve as u128)
+            let new_sol_reserve = (pool_sol_reserve as u128)
                 .checked_add(amount_after_fee as u128)
                 .ok_or(AmmError::MathOverflow)?;
 
@@ -180,7 +182,7 @@ pub mod prove_amm {
                 .checked_div(new_sol_reserve)
                 .ok_or(AmmError::MathOverflow)?;
 
-            amount_out = (pool.token_reserve as u128)
+            amount_out = (pool_token_reserve as u128)
                 .checked_sub(new_token_reserve)
                 .ok_or(AmmError::MathOverflow)? as u64;
 
@@ -188,12 +190,7 @@ pub mod prove_amm {
             require!(amount_out >= min_amount_out, AmmError::SlippageExceeded);
 
             // Transfer tokens from vault to user
-            let mint_key = pool.mint;
-            let seeds = &[
-                b"pool".as_ref(),
-                mint_key.as_ref(),
-                &[pool.bump],
-            ];
+            let seeds = &[b"pool".as_ref(), pool_mint.as_ref(), &[pool_bump]];
             let signer_seeds = &[&seeds[..]];
 
             token::transfer(
@@ -209,9 +206,11 @@ pub mod prove_amm {
                 amount_out,
             )?;
 
-            pool.sol_reserve = new_sol_reserve as u64;
-            pool.token_reserve = pool
-                .token_reserve
+            let pool = &mut ctx.accounts.pool;
+            pool.sol_reserve = pool_sol_reserve
+                .checked_add(amount_after_fee)
+                .ok_or(AmmError::MathOverflow)?;
+            pool.token_reserve = pool_token_reserve
                 .checked_sub(amount_out)
                 .ok_or(AmmError::MathOverflow)?;
         } else {
@@ -229,7 +228,7 @@ pub mod prove_amm {
                 amount_in,
             )?;
 
-            let new_token_reserve = (pool.token_reserve as u128)
+            let new_token_reserve = (pool_token_reserve as u128)
                 .checked_add(amount_after_fee as u128)
                 .ok_or(AmmError::MathOverflow)?;
 
@@ -237,22 +236,14 @@ pub mod prove_amm {
                 .checked_div(new_token_reserve)
                 .ok_or(AmmError::MathOverflow)?;
 
-            amount_out = (pool.sol_reserve as u128)
+            amount_out = (pool_sol_reserve as u128)
                 .checked_sub(new_sol_reserve)
                 .ok_or(AmmError::MathOverflow)? as u64;
 
             require!(amount_out > 0, AmmError::InsufficientOutput);
             require!(amount_out >= min_amount_out, AmmError::SlippageExceeded);
 
-            // Transfer SOL from sol_vault to user
-            let mint_key = pool.mint;
-            let seeds = &[
-                b"pool".as_ref(),
-                mint_key.as_ref(),
-                &[pool.bump],
-            ];
-            let signer_seeds = &[&seeds[..]];
-
+            // Transfer SOL from sol_vault to user via lamport manipulation
             let sol_vault_info = ctx.accounts.sol_vault.to_account_info();
             let user_info = ctx.accounts.user.to_account_info();
 
@@ -265,12 +256,14 @@ pub mod prove_amm {
                 .checked_add(amount_out)
                 .ok_or(AmmError::MathOverflow)?;
 
-            // Keep fee lamports in the vault (fee stays in pool for now)
-            // In Phase 3, CPI to FeeRouter will route fee appropriately
+            // Fee lamports stay in the vault for now.
+            // In Phase 3, CPI to FeeRouter will route fee appropriately.
 
-            pool.token_reserve = new_token_reserve as u64;
-            pool.sol_reserve = pool
-                .sol_reserve
+            let pool = &mut ctx.accounts.pool;
+            pool.token_reserve = pool_token_reserve
+                .checked_add(amount_after_fee)
+                .ok_or(AmmError::MathOverflow)?;
+            pool.sol_reserve = pool_sol_reserve
                 .checked_sub(amount_out)
                 .ok_or(AmmError::MathOverflow)?;
         }
@@ -293,18 +286,23 @@ pub mod prove_amm {
         sol_amount: u64,
         max_token_amount: u64,
     ) -> Result<()> {
-        let pool = &mut ctx.accounts.pool;
+        // Read pool state up front to avoid borrow conflicts
+        let pool_mint = ctx.accounts.pool.mint;
+        let pool_bump = ctx.accounts.pool.bump;
+        let pool_sol_reserve = ctx.accounts.pool.sol_reserve;
+        let pool_token_reserve = ctx.accounts.pool.token_reserve;
+        let pool_lp_supply = ctx.accounts.pool.lp_supply;
 
         require!(sol_amount > 0, AmmError::ZeroAmount);
-        require!(pool.sol_reserve > 0, AmmError::InsufficientLiquidity);
-        require!(pool.token_reserve > 0, AmmError::InsufficientLiquidity);
+        require!(pool_sol_reserve > 0, AmmError::InsufficientLiquidity);
+        require!(pool_token_reserve > 0, AmmError::InsufficientLiquidity);
 
         // Calculate proportional token amount required:
-        // token_amount = sol_amount * token_reserve / sol_reserve
+        // token_amount = sol_amount * token_reserve / sol_reserve (rounded up)
         let token_amount = (sol_amount as u128)
-            .checked_mul(pool.token_reserve as u128)
+            .checked_mul(pool_token_reserve as u128)
             .ok_or(AmmError::MathOverflow)?
-            .checked_div(pool.sol_reserve as u128)
+            .checked_div(pool_sol_reserve as u128)
             .ok_or(AmmError::MathOverflow)? as u64;
 
         // Add 1 to handle rounding (ensure pool doesn't lose value)
@@ -319,9 +317,9 @@ pub mod prove_amm {
 
         // Calculate LP tokens to mint: lp_tokens = sol_amount * lp_supply / sol_reserve
         let lp_tokens = (sol_amount as u128)
-            .checked_mul(pool.lp_supply as u128)
+            .checked_mul(pool_lp_supply as u128)
             .ok_or(AmmError::MathOverflow)?
-            .checked_div(pool.sol_reserve as u128)
+            .checked_div(pool_sol_reserve as u128)
             .ok_or(AmmError::MathOverflow)? as u64;
 
         require!(lp_tokens > 0, AmmError::InsufficientLiquidity);
@@ -352,12 +350,7 @@ pub mod prove_amm {
         )?;
 
         // Mint LP tokens to provider
-        let mint_key = pool.mint;
-        let seeds = &[
-            b"pool".as_ref(),
-            mint_key.as_ref(),
-            &[pool.bump],
-        ];
+        let seeds = &[b"pool".as_ref(), pool_mint.as_ref(), &[pool_bump]];
         let signer_seeds = &[&seeds[..]];
 
         token::mint_to(
@@ -374,16 +367,14 @@ pub mod prove_amm {
         )?;
 
         // Update pool state
-        pool.sol_reserve = pool
-            .sol_reserve
+        let pool = &mut ctx.accounts.pool;
+        pool.sol_reserve = pool_sol_reserve
             .checked_add(sol_amount)
             .ok_or(AmmError::MathOverflow)?;
-        pool.token_reserve = pool
-            .token_reserve
+        pool.token_reserve = pool_token_reserve
             .checked_add(token_amount)
             .ok_or(AmmError::MathOverflow)?;
-        pool.lp_supply = pool
-            .lp_supply
+        pool.lp_supply = pool_lp_supply
             .checked_add(lp_tokens)
             .ok_or(AmmError::MathOverflow)?;
 
@@ -405,24 +396,29 @@ pub mod prove_amm {
         min_sol_out: u64,
         min_tokens_out: u64,
     ) -> Result<()> {
-        let pool = &mut ctx.accounts.pool;
+        // Read pool state up front to avoid borrow conflicts
+        let pool_mint = ctx.accounts.pool.mint;
+        let pool_bump = ctx.accounts.pool.bump;
+        let pool_sol_reserve = ctx.accounts.pool.sol_reserve;
+        let pool_token_reserve = ctx.accounts.pool.token_reserve;
+        let pool_lp_supply = ctx.accounts.pool.lp_supply;
 
         require!(lp_amount > 0, AmmError::ZeroAmount);
-        require!(pool.lp_supply > 0, AmmError::InsufficientLiquidity);
+        require!(pool_lp_supply > 0, AmmError::InsufficientLiquidity);
 
         // Calculate proportional amounts:
         // sol_out = lp_amount * sol_reserve / lp_supply
         // tokens_out = lp_amount * token_reserve / lp_supply
         let sol_out = (lp_amount as u128)
-            .checked_mul(pool.sol_reserve as u128)
+            .checked_mul(pool_sol_reserve as u128)
             .ok_or(AmmError::MathOverflow)?
-            .checked_div(pool.lp_supply as u128)
+            .checked_div(pool_lp_supply as u128)
             .ok_or(AmmError::MathOverflow)? as u64;
 
         let tokens_out = (lp_amount as u128)
-            .checked_mul(pool.token_reserve as u128)
+            .checked_mul(pool_token_reserve as u128)
             .ok_or(AmmError::MathOverflow)?
-            .checked_div(pool.lp_supply as u128)
+            .checked_div(pool_lp_supply as u128)
             .ok_or(AmmError::MathOverflow)? as u64;
 
         require!(sol_out > 0, AmmError::InsufficientOutput);
@@ -443,12 +439,7 @@ pub mod prove_amm {
             lp_amount,
         )?;
 
-        let mint_key = pool.mint;
-        let seeds = &[
-            b"pool".as_ref(),
-            mint_key.as_ref(),
-            &[pool.bump],
-        ];
+        let seeds = &[b"pool".as_ref(), pool_mint.as_ref(), &[pool_bump]];
         let signer_seeds = &[&seeds[..]];
 
         // Transfer tokens from vault to provider
@@ -465,7 +456,7 @@ pub mod prove_amm {
             tokens_out,
         )?;
 
-        // Transfer SOL from sol_vault to provider
+        // Transfer SOL from sol_vault to provider via lamport manipulation
         let sol_vault_info = ctx.accounts.sol_vault.to_account_info();
         let provider_info = ctx.accounts.provider.to_account_info();
 
@@ -479,16 +470,14 @@ pub mod prove_amm {
             .ok_or(AmmError::MathOverflow)?;
 
         // Update pool state
-        pool.sol_reserve = pool
-            .sol_reserve
+        let pool = &mut ctx.accounts.pool;
+        pool.sol_reserve = pool_sol_reserve
             .checked_sub(sol_out)
             .ok_or(AmmError::MathOverflow)?;
-        pool.token_reserve = pool
-            .token_reserve
+        pool.token_reserve = pool_token_reserve
             .checked_sub(tokens_out)
             .ok_or(AmmError::MathOverflow)?;
-        pool.lp_supply = pool
-            .lp_supply
+        pool.lp_supply = pool_lp_supply
             .checked_sub(lp_amount)
             .ok_or(AmmError::MathOverflow)?;
 

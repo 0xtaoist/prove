@@ -1,14 +1,13 @@
-"use client";
-
 import Link from "next/link";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import dynamic from "next/dynamic";
 
-const links = [
-  { href: "/", label: "Feed" },
-  { href: "/launch", label: "Launch" },
-  { href: "/profile", label: "Profile" },
-  { href: "/dashboard", label: "Creator Dashboard" },
-] as const;
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (m) => m.WalletMultiButton,
+    ),
+  { ssr: false },
+);
 
 export function Nav() {
   return (
@@ -17,51 +16,32 @@ export function Nav() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "12px 24px",
+        padding: "12px 16px",
+        maxWidth: 1200,
+        margin: "0 auto",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-secondary)",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
         <Link
           href="/"
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: 700,
-            letterSpacing: "0.08em",
             color: "var(--accent-primary)",
+            letterSpacing: "0.05em",
           }}
         >
           PROVE
         </Link>
-
-        <div style={{ display: "flex", gap: 20 }}>
-          {links.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              style={{
-                fontSize: 14,
-                color: "var(--text-secondary)",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color = "var(--text-primary)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = "var(--text-secondary)")
-              }
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
+        <Link
+          href="/launch"
+          style={{ fontSize: 14, color: "var(--text-secondary)" }}
+        >
+          Launch
+        </Link>
       </div>
-
       <WalletMultiButton />
     </nav>
   );
