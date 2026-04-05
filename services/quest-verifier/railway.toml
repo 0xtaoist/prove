@@ -1,10 +1,10 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && npm run build"
+buildCommand = "pnpm --filter @prove/common build && pnpm --filter @prove/quest-verifier db:generate && pnpm --filter @prove/quest-verifier build"
 watchPatterns = ["services/quest-verifier/**", "packages/common/**"]
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "cd services/quest-verifier && pnpm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

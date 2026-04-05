@@ -1,10 +1,10 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && npm run build"
+buildCommand = "pnpm --filter @prove/common build && pnpm --filter @prove/indexer db:generate && pnpm --filter @prove/indexer build"
 watchPatterns = ["services/indexer/**", "packages/common/**"]
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "cd services/indexer && pnpm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

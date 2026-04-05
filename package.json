@@ -1,25 +1,27 @@
 {
   "name": "prove",
   "private": true,
-  "workspaces": [
-    "app",
-    "services/*",
-    "packages/*"
-  ],
   "scripts": {
-    "dev:app": "yarn workspace @prove/app dev",
-    "dev:indexer": "yarn workspace @prove/indexer dev",
-    "dev:quest": "yarn workspace @prove/quest-verifier dev",
-    "build:app": "yarn workspace @prove/app build",
-    "build:indexer": "yarn workspace @prove/indexer build",
-    "build:quest": "yarn workspace @prove/quest-verifier build",
-    "build:all": "yarn workspaces foreach -A run build",
-    "lint": "yarn workspaces foreach -A run lint",
-    "test": "yarn workspaces foreach -A run test",
-    "db:migrate": "yarn workspace @prove/indexer db:migrate",
-    "db:generate": "yarn workspace @prove/indexer db:generate"
+    "dev:app": "pnpm --filter @prove/app dev",
+    "dev:indexer": "pnpm --filter @prove/indexer dev",
+    "dev:quest": "pnpm --filter @prove/quest-verifier dev",
+    "build:app": "pnpm --filter @prove/common build && pnpm --filter @prove/app build",
+    "build:indexer": "pnpm --filter @prove/common build && pnpm --filter @prove/indexer build",
+    "build:quest": "pnpm --filter @prove/common build && pnpm --filter @prove/quest-verifier build",
+    "build:all": "pnpm --filter @prove/common build && pnpm -r --filter '!@prove/common' run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "db:migrate": "pnpm --filter @prove/indexer db:migrate",
+    "db:generate": "pnpm --filter @prove/indexer db:generate"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "pnpm": {
+    "neverBuiltDependencies": [
+      "usb",
+      "tiny-secp256k1",
+      "blake-hash"
+    ]
   }
 }
