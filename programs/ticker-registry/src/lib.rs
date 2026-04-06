@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Tick1111111111111111111111111111111111111111");
+declare_id!("Tick111111111111111111111111111111111111111");
 
 #[program]
 pub mod ticker_registry {

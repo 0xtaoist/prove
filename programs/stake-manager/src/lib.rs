@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("Stak1111111111111111111111111111111111111111");
+declare_id!("Stak111111111111111111111111111111111111111");
 
 /// 2 SOL in lamports.
 const STAKE_AMOUNT: u64 = 2_000_000_000;
@@ -78,62 +78,58 @@ pub mod stake_manager {
     /// externally; the on-chain program trusts the caller value.
     pub fn evaluate_milestone(ctx: Context<EvaluateMilestone>, holder_count: u16) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let stake = &mut ctx.accounts.stake;
 
-        // Must still be escrowed.
+        // Read stake fields before mutable borrow
+        let stake_state = ctx.accounts.stake.state;
+        let stake_deadline = ctx.accounts.stake.milestone_deadline;
+        let stake_amount = ctx.accounts.stake.amount;
+
         require!(
-            stake.state == StakeState::Escrowed,
+            stake_state == StakeState::Escrowed,
             StakeError::AlreadyEvaluated
         );
+        require!(now >= stake_deadline, StakeError::DeadlineNotReached);
 
-        // Cannot evaluate before the deadline has passed.
-        require!(now >= stake.milestone_deadline, StakeError::DeadlineNotReached);
+        // Get account infos before any mutable borrows
+        let vault_info = ctx.accounts.stake_vault.to_account_info();
+        let creator_info = ctx.accounts.creator.to_account_info();
 
+        if holder_count >= HOLDER_THRESHOLD {
+            // Lamport transfer: vault -> creator
+            **vault_info.try_borrow_mut_lamports()? = vault_info
+                .lamports()
+                .checked_sub(stake_amount)
+                .ok_or(StakeError::MathOverflow)?;
+            **creator_info.try_borrow_mut_lamports()? = creator_info
+                .lamports()
+                .checked_add(stake_amount)
+                .ok_or(StakeError::MathOverflow)?;
+        }
+
+        // Now take mutable borrows to update state
+        let stake = &mut ctx.accounts.stake;
         stake.holder_count_at_eval = holder_count;
 
         let vault = &mut ctx.accounts.stake_vault;
 
         if holder_count >= HOLDER_THRESHOLD {
-            // ---- Milestone MET: return SOL to creator ----
             stake.state = StakeState::Returned;
-
-            // Transfer SOL back from vault to creator via direct lamport manipulation.
-            // This is safe because the vault is a PDA owned by this program.
-            let vault_info = ctx.accounts.stake_vault.to_account_info();
-            let creator_info = ctx.accounts.creator.to_account_info();
-
-            **vault_info.try_borrow_mut_lamports()? = vault_info
-                .lamports()
-                .checked_sub(stake.amount)
-                .ok_or(StakeError::MathOverflow)?;
-            **creator_info.try_borrow_mut_lamports()? = creator_info
-                .lamports()
-                .checked_add(stake.amount)
-                .ok_or(StakeError::MathOverflow)?;
-
             vault.total_returned = vault
                 .total_returned
-                .checked_add(stake.amount)
-                .ok_or(StakeError::MathOverflow)?;
-
-            vault.total_escrowed = vault
-                .total_escrowed
-                .checked_sub(stake.amount)
+                .checked_add(stake_amount)
                 .ok_or(StakeError::MathOverflow)?;
         } else {
-            // ---- Milestone MISSED: forfeit stake ----
             stake.state = StakeState::Forfeited;
-
             vault.total_forfeited = vault
                 .total_forfeited
-                .checked_add(stake.amount)
-                .ok_or(StakeError::MathOverflow)?;
-
-            vault.total_escrowed = vault
-                .total_escrowed
-                .checked_sub(stake.amount)
+                .checked_add(stake_amount)
                 .ok_or(StakeError::MathOverflow)?;
         }
+
+        vault.total_escrowed = vault
+            .total_escrowed
+            .checked_sub(stake_amount)
+            .ok_or(StakeError::MathOverflow)?;
 
         Ok(())
     }
@@ -156,12 +152,10 @@ pub mod stake_manager {
         );
         require!(!qualifying_mints.is_empty(), StakeError::NoQualifyingMints);
 
-        let vault = &mut ctx.accounts.stake_vault;
-
-        // Distributable = total_forfeited - total_distributed (what hasn't been paid out yet).
-        let distributable = vault
+        // Read vault fields before mutable borrow
+        let distributable = ctx.accounts.stake_vault
             .total_forfeited
-            .checked_sub(vault.total_distributed)
+            .checked_sub(ctx.accounts.stake_vault.total_distributed)
             .ok_or(StakeError::MathOverflow)?;
         require!(distributable > 0, StakeError::NothingToDistribute);
 
@@ -183,6 +177,7 @@ pub mod stake_manager {
             StakeError::AccountMismatch
         );
 
+        // Get account info before mutable borrow
         let vault_info = ctx.accounts.stake_vault.to_account_info();
         let mut total_paid: u64 = 0;
 
@@ -248,6 +243,8 @@ pub mod stake_manager {
                 .ok_or(StakeError::MathOverflow)?;
         }
 
+        // Now take mutable borrow to update state
+        let vault = &mut ctx.accounts.stake_vault;
         vault.total_distributed = vault
             .total_distributed
             .checked_add(total_paid)

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("FeeR1111111111111111111111111111111111111111");
+declare_id!("FeeR111111111111111111111111111111111111111");
 
 #[program]
 pub mod fee_router {
