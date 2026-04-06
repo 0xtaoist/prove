@@ -74,7 +74,6 @@ export function Nav() {
                     : "text-foreground-muted hover:text-foreground hover:bg-white/5"
                 }`}
               >
-                {link.label}
                 {isActive(link.href) && (
                   <motion.div
                     layoutId="nav-indicator"
