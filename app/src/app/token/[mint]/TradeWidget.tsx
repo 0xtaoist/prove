@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { PublicKey } from "@solana/web3.js";
+import { useSwap } from "../../../hooks/useSwap";
 import styles from "./TradeWidget.module.css";
 
 const SLIPPAGE_OPTIONS = [0.5, 1, 2] as const;

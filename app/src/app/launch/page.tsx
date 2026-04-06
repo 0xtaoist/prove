@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useAuction } from "../../hooks/useAuction";
 import styles from "./page.module.css";
 
 interface FormData {
@@ -25,6 +26,7 @@ const STAKE_AMOUNT = 2;
 export default function LaunchPage() {
   const { publicKey, connected } = useWallet();
   const { connection } = useConnection();
+  const { createAuction, loading: auctionLoading, error: auctionError, signature: auctionSig } = useAuction();
   const [balance, setBalance] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>({
     ticker: "",
@@ -227,10 +229,25 @@ export default function LaunchPage() {
         <button
           type="submit"
           className={styles.submitBtn}
-          disabled={!connected}
+          disabled={!connected || auctionLoading}
         >
-          {connected ? `Launch \u2014 Pay ${STAKE_AMOUNT} SOL Stake` : "Connect Wallet to Launch"}
+          {auctionLoading
+            ? "Sending Transaction..."
+            : connected
+              ? `Launch \u2014 Pay ${STAKE_AMOUNT} SOL Stake`
+              : "Connect Wallet to Launch"}
         </button>
+
+        {auctionError && (
+          <p className={styles.error} style={{ marginTop: 8 }}>
+            {auctionError}
+          </p>
+        )}
+        {auctionSig && (
+          <p style={{ marginTop: 8, color: "#4caf50", fontSize: 14 }}>
+            Success! Tx: {auctionSig.slice(0, 16)}...
+          </p>
+        )}
       </form>
 
       {/* Confirmation Modal */}
@@ -274,15 +291,19 @@ export default function LaunchPage() {
               </button>
               <button
                 className={styles.modalConfirm}
-                onClick={() => {
-                  // TODO: call BatchAuction.create_auction
-                  setShowModal(false);
-                  alert(
-                    `Would create auction for $${form.ticker} with supply ${form.totalSupply}`,
+                disabled={auctionLoading}
+                onClick={async () => {
+                  const sig = await createAuction(
+                    form.ticker,
+                    Number(form.totalSupply),
                   );
+                  setShowModal(false);
+                  if (sig) {
+                    alert(`Auction created! Signature: ${sig}`);
+                  }
                 }}
               >
-                Confirm Launch
+                {auctionLoading ? "Sending..." : "Confirm Launch"}
               </button>
             </div>
           </div>
