@@ -202,10 +202,9 @@ export default function LandingPage() {
                       "linear-gradient(180deg, black 0%, black 80%, transparent 100%)",
                   }}
                 >
-                  coins that
-                  <br />
+                  prove{" "}
                   <span className="bg-gradient-to-br from-white via-white to-purple-300 bg-clip-text text-transparent">
-                    stick.
+                    it.
                   </span>
                 </h1>
 
