@@ -1,323 +1,383 @@
+/* ── Container ── */
 .page {
-  padding: 32px 0;
+  border-left: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
-  gap: 32px;
 }
 
-/* ── Header ── */
-.header {
+/* ── Band 1: Token Header ── */
+.bandHeader {
+  background: hsl(var(--background));
+  padding: 32px 32px 24px;
+  border-bottom: 1px solid hsl(var(--border));
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 16px;
 }
 
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+
 .ticker {
+  font-family: hsl(var(--font-mono));
   font-family: var(--font-mono);
   font-size: 36px;
   font-weight: 700;
   letter-spacing: 0.04em;
-}
-
-.headerMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  color: hsl(var(--foreground));
+  line-height: 1;
 }
 
 .tokenName {
-  font-size: 18px;
-  color: var(--text-secondary);
+  font-size: 16px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 4px;
 }
 
-.creator {
+.creatorLink {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--text-secondary);
+  color: hsl(var(--muted-foreground));
+  margin-top: 2px;
 }
 
-.creator a:hover {
-  color: var(--accent-primary);
+.creatorLink a {
+  color: hsl(var(--muted-foreground));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.badges {
+.creatorLink a:hover {
+  color: hsl(var(--primary));
+}
+
+.headerRight {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   flex-wrap: wrap;
-  margin-left: auto;
 }
 
-/* ── Main grid ── */
-.main {
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+}
+
+.badgeSage {
+  background: hsl(var(--sage));
+  color: hsl(var(--foreground));
+}
+
+.badgeLavender {
+  background: hsl(var(--lavender));
+  color: hsl(var(--foreground));
+}
+
+.badgeCream {
+  background: hsl(var(--cream));
+  color: hsl(var(--foreground));
+}
+
+.badgeRose {
+  background: hsl(var(--rose));
+  color: hsl(var(--foreground));
+}
+
+.batchPrice {
+  width: 100%;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}
+
+/* ── Band 2: Price + Stats ── */
+.bandStats {
+  background: hsl(var(--sage) / 0.3);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.statsGrid {
   display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 24px;
+  grid-template-columns: repeat(5, 1fr);
 }
 
-@media (max-width: 900px) {
-  .main {
-    grid-template-columns: 1fr;
+@media (max-width: 800px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-/* ── Price section ── */
-.priceSection {
-  background: var(--bg-card);
-  border: 1px solid rgba(124, 58, 237, 0.15);
-  border-radius: 12px;
-  padding: 24px;
+@media (max-width: 500px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
-.priceRow {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 16px;
+.statCell {
+  padding: 20px 24px;
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-.priceValue {
-  font-family: var(--font-mono);
-  font-size: 32px;
-  font-weight: 700;
-}
-
-.priceChange {
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.chartPlaceholder {
-  width: 100%;
-  height: 200px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-/* ── Trade widget ── */
-.tradeWidget {
-  background: var(--bg-card);
-  border: 1px solid rgba(124, 58, 237, 0.15);
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-self: start;
-}
-
-.tabs {
-  display: flex;
-  gap: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-
-.tab {
-  flex: 1;
-  padding: 10px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--bg-secondary);
-  transition: background 0.15s, color 0.15s;
-}
-
-.tabActive {
-  background: var(--accent-primary);
-  color: #fff;
-}
-
-.tabSell.tabActive {
-  background: var(--danger);
-}
-
-.inputGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.inputLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.inputField {
-  width: 100%;
-  padding: 10px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-size: 16px;
-  color: var(--text-primary);
-  transition: border-color 0.15s;
-}
-
-.inputField:focus {
-  border-color: var(--accent-primary);
-  outline: none;
-}
-
-.estimate {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.slippageRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.slippageLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-right: auto;
-}
-
-.slippageBtn {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.slippageBtnActive {
-  border-color: var(--accent-primary);
-  background: rgba(124, 58, 237, 0.15);
-  color: var(--accent-hover);
-}
-
-.feeBreakdown {
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tradeBtn {
-  width: 100%;
-  padding: 14px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  transition: opacity 0.15s;
-}
-
-.tradeBtn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.tradeBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tradeBtnBuy {
-  background: var(--accent-primary);
-}
-
-.tradeBtnSell {
-  background: var(--danger);
-}
-
-/* ── Stats grid ── */
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.statCard {
-  background: var(--bg-card);
-  border: 1px solid rgba(124, 58, 237, 0.15);
-  border-radius: 12px;
-  padding: 16px;
+.statCell:last-child {
+  border-right: none;
 }
 
 .statLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 4px;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 6px;
 }
 
 .statValue {
   font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
+  color: hsl(var(--foreground));
 }
 
-/* ── Sections ── */
-.section {
+.statChange {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.statChangePositive {
+  color: hsl(var(--success));
+}
+
+.statChangeNegative {
+  color: hsl(var(--danger));
+}
+
+/* ── Band 3: Trade Widget Area ── */
+.bandTrade {
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+  display: grid;
+  grid-template-columns: 1fr 400px;
+}
+
+@media (max-width: 900px) {
+  .bandTrade {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartArea {
+  padding: 32px;
+  border-right: 1px solid hsl(var(--border));
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+@media (max-width: 900px) {
+  .chartArea {
+    border-right: none;
+    border-bottom: 1px solid hsl(var(--border));
+    min-height: 200px;
+  }
+}
+
+.chartPlaceholder {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  background: hsl(var(--sage) / 0.15);
+}
+
+/* ── Band 4: Quest Section Header ── */
+.bandQuestHeader {
+  background: hsl(var(--lavender) / 0.3);
+  padding: 16px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+}
+
+/* ── Band 5: Quest List ── */
+.bandQuests {
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.questRow {
+  padding: 20px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+  display: grid;
+  grid-template-columns: 1fr 200px 80px 140px;
+  align-items: center;
   gap: 16px;
 }
 
-.sectionTitle {
-  font-size: 20px;
-  font-weight: 700;
+.questRow:last-child {
+  border-bottom: none;
 }
 
-.questList {
+@media (max-width: 700px) {
+  .questRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.questInfo {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 2px;
 }
 
-/* ── Creator section ── */
-.creatorCard {
-  background: var(--bg-card);
-  border: 1px solid rgba(124, 58, 237, 0.15);
-  border-radius: 12px;
-  padding: 20px;
+.questName {
+  font-weight: 600;
+  font-size: 14px;
+  color: hsl(var(--foreground));
+}
+
+.questDesc {
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+
+.questProgressWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.questProgressTrack {
+  flex: 1;
+  height: 4px;
+  background: hsl(var(--border));
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.questProgressFill {
+  height: 100%;
+  background: hsl(var(--primary));
+  border-radius: 0;
+  transition: width 0.3s ease;
+}
+
+.questProgressFillComplete {
+  background: hsl(var(--success));
+}
+
+.questNumbers {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.questStatus {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.questStatusDone {
+  color: hsl(var(--success));
+}
+
+.questStatusProgress {
+  color: hsl(var(--muted-foreground));
+}
+
+.questReward {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+/* ── Band 6: Creator Section Header ── */
+.bandCreatorHeader {
+  background: hsl(var(--cream) / 0.3);
+  padding: 16px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* ── Band 7: Creator Info ── */
+.bandCreator {
+  background: hsl(var(--background));
+  padding: 24px 32px;
+  border-bottom: 1px solid hsl(var(--border));
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
-  align-items: center;
+  gap: 32px;
 }
 
-.creatorInfo {
+.creatorStat {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.creatorWallet {
+.creatorStatLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+}
+
+.creatorStatValue {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
 }
 
-.creatorWallet a:hover {
-  color: var(--accent-primary);
+.creatorStatValue a {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.creatorStat {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--text-secondary);
+.creatorStatValue a:hover {
+  color: hsl(var(--primary));
 }
 
-/* ── Holder list ── */
+/* ── Band 8: Top Holders ── */
+.bandHoldersHeader {
+  background: hsl(var(--sage) / 0.15);
+  padding: 16px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
 .holderTable {
   width: 100%;
   border-collapse: collapse;
@@ -325,42 +385,37 @@
 
 .holderTable th {
   text-align: left;
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  padding: 12px 24px;
+  border-bottom: 1px solid hsl(var(--border));
+  font-weight: 600;
 }
 
 .holderTable td {
-  padding: 10px 12px;
+  padding: 12px 24px;
   font-size: 14px;
-  border-bottom: 1px solid rgba(42, 42, 62, 0.5);
   font-family: var(--font-mono);
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-.holderTable tr:hover td {
-  background: rgba(124, 58, 237, 0.05);
+.holderTable tbody tr:last-child td {
+  border-bottom: none;
 }
 
-/* ── Loading / Error ── */
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  color: var(--text-secondary);
-  font-size: 16px;
+.holderTable tbody tr:hover td {
+  background: hsl(var(--sage) / 0.2);
 }
 
-.error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  gap: 12px;
-  color: var(--danger);
-  text-align: center;
+.holderTable td a {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.holderTable td a:hover {
+  color: hsl(var(--primary));
 }

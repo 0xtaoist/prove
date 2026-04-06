@@ -14,7 +14,7 @@ const WalletMultiButton = dynamic(
 );
 
 const navLinks = [
-  { href: "/", label: "discover" },
+  { href: "/discover", label: "discover" },
   { href: "/launch", label: "launch" },
   { href: "/creators", label: "creators" },
 ];

@@ -1,0 +1,268 @@
+/* ═══════════════════════════════════════════
+   DISCOVER PAGE — Savage band layout
+   ═══════════════════════════════════════════ */
+
+.page {
+  border-left: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border));
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* ── Band 1: Page header ── */
+.headerBand {
+  background: hsl(var(--sage) / 0.3);
+  padding: 48px 32px 40px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: hsl(var(--primary));
+  margin-bottom: 8px;
+}
+
+.heading {
+  font-size: 32px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  line-height: 1.2;
+  margin-bottom: 8px;
+  text-transform: lowercase;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+
+/* ── Band 2: Auctions section header ── */
+.auctionHeaderBand {
+  background: hsl(var(--lavender) / 0.3);
+  padding: 20px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sectionLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionKicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: hsl(var(--foreground));
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 0;
+}
+
+.liveIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+
+.greenDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--success));
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Band 3: Auction list ── */
+.auctionList {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.emptyState {
+  padding: 48px 32px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+}
+
+/* ── Band 4: Token feed header ── */
+.feedHeaderBand {
+  background: hsl(var(--cream) / 0.3);
+  padding: 20px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sortControls {
+  display: inline-flex;
+  border: 1px solid hsl(var(--border));
+}
+
+.sortBtn {
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: none;
+  border-right: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.sortBtn:last-child {
+  border-right: none;
+}
+
+.sortBtn:hover {
+  color: hsl(var(--foreground));
+}
+
+.sortBtnActive {
+  composes: sortBtn;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+
+/* ── Band 5: Token feed ── */
+.tokenFeed {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* Skeleton loading */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.skeletonBlock {
+  background: hsl(var(--border));
+  height: 16px;
+  border-radius: 0;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonTicker {
+  composes: skeletonBlock;
+  width: 100px;
+  height: 20px;
+}
+
+.skeletonStat {
+  composes: skeletonBlock;
+  width: 70px;
+}
+
+.skeletonBadge {
+  composes: skeletonBlock;
+  width: 60px;
+  height: 22px;
+}
+
+.skeletonScore {
+  composes: skeletonBlock;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Band 6: How to get listed ── */
+.ctaBand {
+  padding: 40px 32px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.ctaText {
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.7;
+  max-width: 600px;
+}
+
+.ctaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  text-decoration: none;
+  border-bottom: 1px solid hsl(var(--primary));
+  padding-bottom: 2px;
+  transition: opacity 0.15s ease;
+}
+
+.ctaLink:hover {
+  opacity: 0.8;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .page {
+    border-left: none;
+    border-right: none;
+  }
+
+  .headerBand {
+    padding: 32px 16px 28px;
+  }
+
+  .heading {
+    font-size: 24px;
+  }
+
+  .auctionHeaderBand,
+  .feedHeaderBand {
+    padding: 16px;
+  }
+
+  .ctaBand {
+    padding: 32px 16px;
+  }
+}

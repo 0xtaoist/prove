@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import styles from "./page.module.css";
+import styles from "./TradeWidget.module.css";
 
 const SLIPPAGE_OPTIONS = [0.5, 1, 2] as const;
 
@@ -18,31 +18,31 @@ export function TradeWidget({ ticker, currentPrice }: TradeWidgetProps) {
   const [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState<number>(1);
 
-  const solAmount = parseFloat(amount) || 0;
+  const rawAmount = parseFloat(amount) || 0;
   const priceInSol = currentPrice / 1e9;
-  const estimatedTokens =
-    side === "buy" && priceInSol > 0
-      ? solAmount / priceInSol
-      : 0;
-  const estimatedSol =
-    side === "sell" ? solAmount * priceInSol : 0;
 
-  const fee = solAmount * 0.01;
-  const creatorFee = solAmount * 0.008;
-  const protocolFee = solAmount * 0.002;
+  const estimatedTokens =
+    side === "buy" && priceInSol > 0 ? (rawAmount * 0.99) / priceInSol : 0;
+
+  const estimatedSol =
+    side === "sell" ? rawAmount * priceInSol * 0.99 : 0;
+
+  const fee = rawAmount * 0.01;
+  const creatorFee = rawAmount * 0.008;
+  const protocolFee = rawAmount * 0.002;
 
   return (
-    <div className={styles.tradeWidget}>
+    <div className={styles.widget}>
       {/* Tabs */}
       <div className={styles.tabs}>
         <button
-          className={`${styles.tab} ${side === "buy" ? styles.tabActive : ""}`}
+          className={`${styles.tab} ${side === "buy" ? styles.tabActiveBuy : ""}`}
           onClick={() => setSide("buy")}
         >
           Buy
         </button>
         <button
-          className={`${styles.tab} ${styles.tabSell} ${side === "sell" ? styles.tabActive : ""}`}
+          className={`${styles.tab} ${side === "sell" ? styles.tabActiveSell : ""}`}
           onClick={() => setSide("sell")}
         >
           Sell
@@ -65,54 +65,60 @@ export function TradeWidget({ ticker, currentPrice }: TradeWidgetProps) {
         />
       </div>
 
-      {/* Estimate */}
-      {solAmount > 0 && (
+      {/* Estimated output */}
+      {rawAmount > 0 && (
         <div className={styles.estimate}>
           {side === "buy"
-            ? `~ ${estimatedTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${ticker}`
-            : `~ ${estimatedSol.toLocaleString(undefined, { maximumFractionDigits: 4 })} SOL`}
+            ? `Est. output: ${estimatedTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${ticker}`
+            : `Est. output: ${estimatedSol.toLocaleString(undefined, { maximumFractionDigits: 4 })} SOL`}
         </div>
       )}
 
-      {/* Slippage */}
+      {/* Slippage selector */}
       <div className={styles.slippageRow}>
         <span className={styles.slippageLabel}>Slippage</span>
-        {SLIPPAGE_OPTIONS.map((opt) => (
-          <button
-            key={opt}
-            className={`${styles.slippageBtn} ${slippage === opt ? styles.slippageBtnActive : ""}`}
-            onClick={() => setSlippage(opt)}
-          >
-            {opt}%
-          </button>
-        ))}
+        <div className={styles.slippageGroup}>
+          {SLIPPAGE_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              className={`${styles.slippageBtn} ${slippage === opt ? styles.slippageBtnActive : ""}`}
+              onClick={() => setSlippage(opt)}
+            >
+              {opt}%
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Fee breakdown */}
-      {solAmount > 0 && (
-        <div className={styles.feeBreakdown}>
-          <span>1% fee: {fee.toFixed(4)} SOL</span>
-          <span>
-            &nbsp;&nbsp;0.8% creator: {creatorFee.toFixed(4)} SOL
-          </span>
-          <span>
-            &nbsp;&nbsp;0.2% protocol: {protocolFee.toFixed(4)} SOL
-          </span>
-        </div>
-      )}
+      <div className={styles.feeBreakdown}>
+        1% fee: 0.8% to creator, 0.2% protocol
+        {rawAmount > 0 && (
+          <>
+            <br />
+            Fee: {fee.toFixed(4)} SOL (creator: {creatorFee.toFixed(4)}, protocol:{" "}
+            {protocolFee.toFixed(4)})
+          </>
+        )}
+      </div>
 
       {/* Action */}
       {connected ? (
         <button
-          className={`${styles.tradeBtn} ${side === "buy" ? styles.tradeBtnBuy : styles.tradeBtnSell}`}
-          disabled={solAmount <= 0}
+          className={`${styles.actionBtn} ${side === "buy" ? styles.actionBtnBuy : styles.actionBtnSell}`}
+          disabled={rawAmount <= 0}
         >
           {side === "buy" ? "Buy" : "Sell"} {ticker}
         </button>
       ) : (
-        <WalletMultiButton
-          style={{ width: "100%", justifyContent: "center" }}
-        />
+        <div className={styles.walletMessage}>
+          Connect wallet to trade
+          <div style={{ marginTop: 8 }}>
+            <WalletMultiButton
+              style={{ borderRadius: 0, width: "100%", justifyContent: "center" }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

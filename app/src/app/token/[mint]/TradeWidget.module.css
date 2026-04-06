@@ -1,0 +1,194 @@
+/* ── Trade Widget ── */
+.widget {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: inline-flex;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 24px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  border: none;
+  border-right: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-radius: 0;
+}
+
+.tab:last-child {
+  border-right: none;
+}
+
+.tab:hover {
+  background: hsl(var(--sage) / 0.3);
+}
+
+.tabActiveBuy {
+  background: hsl(var(--sage));
+  color: hsl(var(--foreground));
+}
+
+.tabActiveSell {
+  background: hsl(var(--rose));
+  color: hsl(var(--foreground));
+}
+
+/* ── Input ── */
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inputLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+}
+
+.inputField {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.inputField:focus {
+  border-color: hsl(var(--primary));
+}
+
+.inputField::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Estimate ── */
+.estimate {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+  background: hsl(var(--sage) / 0.15);
+}
+
+/* ── Slippage ── */
+.slippageRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.slippageLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  margin-right: auto;
+}
+
+.slippageGroup {
+  display: inline-flex;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.slippageBtn {
+  padding: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  border: none;
+  border-right: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-radius: 0;
+}
+
+.slippageBtn:last-child {
+  border-right: none;
+}
+
+.slippageBtnActive {
+  background: hsl(var(--sage));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+/* ── Fee breakdown ── */
+.feeBreakdown {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  padding: 8px 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+/* ── Action Button ── */
+.actionBtn {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  color: hsl(var(--primary-foreground));
+}
+
+.actionBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.actionBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.actionBtnBuy {
+  background: hsl(var(--primary));
+}
+
+.actionBtnSell {
+  background: hsl(var(--destructive));
+}
+
+/* ── Wallet message ── */
+.walletMessage {
+  text-align: center;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  padding: 12px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 0;
+}

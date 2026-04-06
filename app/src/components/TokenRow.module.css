@@ -1,0 +1,161 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid hsl(var(--border));
+  text-decoration: none;
+  transition: background-color 0.1s ease;
+}
+
+.row:hover {
+  background: hsl(var(--sage) / 0.1);
+}
+
+/* ── Identity (left) ── */
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+}
+
+.ticker {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.name {
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Stats (middle) ── */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 70px;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.statDivider {
+  width: 1px;
+  height: 28px;
+  background: hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.positive {
+  color: hsl(var(--success));
+}
+
+.negative {
+  color: hsl(var(--destructive));
+}
+
+/* ── Meta (right) ── */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.badgeVerified {
+  background: hsl(var(--sage));
+  color: hsl(var(--foreground));
+}
+
+.badgeDiamond {
+  background: hsl(var(--lavender));
+  color: hsl(var(--foreground));
+}
+
+.badgeSurvivor {
+  background: hsl(var(--cream));
+  color: hsl(var(--foreground));
+}
+
+/* ── Score ── */
+.score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0;
+}
+
+.scoreNumber {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .row {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .stats {
+    order: 10;
+    min-width: 100%;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .statDivider {
+    display: none;
+  }
+
+  .meta {
+    margin-left: 0;
+  }
+}
