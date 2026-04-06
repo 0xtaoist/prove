@@ -202,10 +202,8 @@ export default function LandingPage() {
                       "linear-gradient(180deg, black 0%, black 80%, transparent 100%)",
                   }}
                 >
-                  prove{" "}
-                  <span className="bg-gradient-to-br from-white via-white to-purple-300 bg-clip-text text-transparent">
-                    it.
-                  </span>
+                  <span className="bg-gradient-to-br from-purple-300 via-white to-white bg-clip-text text-transparent" style={{ filter: "drop-shadow(0 0 30px rgba(168,85,247,0.4))" }}>prove</span>{" "}
+                  it.
                 </h1>
 
                 {/* Description */}
