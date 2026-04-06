@@ -157,12 +157,12 @@ export default function LandingPage() {
         />
       </div>
 
-      {/* ── Dark fade over right side so text pops over canvas ── */}
+      {/* ── Dark fade over left side so text pops, Sisyphus stays visible on right ── */}
       <div
         className="absolute inset-0 z-[1] hidden lg:block pointer-events-none"
         style={{
           background:
-            "linear-gradient(to right, transparent 0%, transparent 30%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.85) 70%, rgba(0,0,0,0.95) 100%)",
+            "linear-gradient(to right, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.8) 35%, rgba(0,0,0,0.45) 55%, transparent 75%, transparent 100%)",
         }}
       />
 
