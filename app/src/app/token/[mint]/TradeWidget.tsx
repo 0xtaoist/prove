@@ -44,9 +44,7 @@ export function TradeWidget({ ticker, mint, currentPrice }: TradeWidgetProps) {
 
       {/* Fee info */}
       <div className={styles.feeBreakdown}>
-        Trading happens on Raydium/Jupiter. Raydium CPMM pool fee: 0.25%.
-        <br />
-        Creator earns LP fees from the Raydium pool.
+        1% swap fee on all trades — 0.8% to creator, 0.2% to protocol
       </div>
 
       {/* Action */}

@@ -1,9 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
 
-// Platform fee configuration
-// Note: With Raydium integration, creator fees are no longer collected per-swap
-// on our AMM. Creators earn through LP fees from the Raydium pool instead.
-// These constants are retained for batch auction fee calculations and platform-level fees.
+// Fee Architecture:
+// - Raydium CLMM pool with 1% fee tier (cannot be bypassed)
+// - LP position owned by FeeRouter PDA
+// - Fees claimed periodically and split:
+//   CREATOR_FEE_BPS (80) = 0.8% of all trading volume to creator
+//   PROTOCOL_FEE_BPS (20) = 0.2% of all trading volume to protocol
 export const CREATOR_FEE_BPS = 80; // 0.8%
 export const PROTOCOL_FEE_BPS = 20; // 0.2%
 export const TOTAL_FEE_BPS = 100; // 1.0%
