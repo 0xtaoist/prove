@@ -1,0 +1,146 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid hsl(var(--border));
+  text-decoration: none;
+  transition: background-color 0.1s ease;
+}
+
+.row:hover {
+  background: hsl(var(--sage) / 0.3);
+}
+
+/* ── Ticker ── */
+.tickerCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--success));
+  flex-shrink: 0;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.ticker {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+/* ── Countdown ── */
+.countdownCell {
+  min-width: 80px;
+}
+
+.countdown {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  letter-spacing: 0.04em;
+}
+
+/* ── Stats ── */
+.statCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* ── Progress ── */
+.progressCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1;
+  max-width: 200px;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 4px;
+  background: hsl(var(--border));
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: hsl(var(--primary));
+  border-radius: 0;
+  transition: width 0.3s ease;
+}
+
+.progressLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: 0.03em;
+}
+
+/* ── Action ── */
+.actionCell {
+  margin-left: auto;
+}
+
+.commitLink {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.row:hover .commitLink {
+  text-decoration: underline;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .row {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .progressCell {
+    min-width: 100%;
+    max-width: none;
+    order: 10;
+  }
+
+  .actionCell {
+    margin-left: 0;
+  }
+}
