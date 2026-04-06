@@ -3,7 +3,7 @@ import { AuctionRow } from "@/components/AuctionRow";
 import type { AuctionRowProps } from "@/components/AuctionRow";
 import { TokenRow } from "@/components/TokenRow";
 import type { TokenRowProps } from "@/components/TokenRow";
-import styles from "./page.module.css";
+import { DiscoverClient } from "./DiscoverClient";
 
 const API_BASE = process.env.INDEXER_API_URL ?? "http://localhost:4000";
 
@@ -77,25 +77,6 @@ async function getFeed(): Promise<TokenRowProps[]> {
   }
 }
 
-/* ── Skeleton for loading state ── */
-
-function SkeletonRows({ count }: { count: number }) {
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={styles.skeletonRow}>
-          <div className={styles.skeletonTicker} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonBadge} />
-          <div className={styles.skeletonScore} />
-        </div>
-      ))}
-    </>
-  );
-}
-
 /* ── Page ── */
 
 export default async function DiscoverPage() {
@@ -104,72 +85,5 @@ export default async function DiscoverPage() {
     getFeed(),
   ]);
 
-  return (
-    <div className={styles.page}>
-      {/* Band 1: Page header */}
-      <section className={styles.headerBand}>
-        <p className={styles.kicker}>DISCOVER</p>
-        <h1 className={styles.heading}>tokens that proved themselves.</h1>
-        <p className={styles.subtitle}>
-          Only surviving tokens appear here. No noise.
-        </p>
-      </section>
-
-      {/* Band 2: Auctions section header */}
-      <section className={styles.auctionHeaderBand}>
-        <div className={styles.sectionLeft}>
-          <span className={styles.sectionKicker}>LIVE AUCTIONS</span>
-          <span className={styles.countBadge}>{auctions.length}</span>
-        </div>
-        <div className={styles.liveIndicator}>
-          <span className={styles.greenDot} />
-          <span>gathering now</span>
-        </div>
-      </section>
-
-      {/* Band 3: Active auctions list */}
-      <section className={styles.auctionList}>
-        {auctions.length === 0 ? (
-          <p className={styles.emptyState}>no active auctions right now.</p>
-        ) : (
-          auctions.map((a) => <AuctionRow key={a.mint} {...a} />)
-        )}
-      </section>
-
-      {/* Band 4: Token feed header */}
-      <section className={styles.feedHeaderBand}>
-        <div className={styles.sectionLeft}>
-          <span className={styles.sectionKicker}>TOKEN FEED</span>
-        </div>
-        <div className={styles.sortControls}>
-          <button className={styles.sortBtnActive}>holders</button>
-          <button className={styles.sortBtn}>volume</button>
-          <button className={styles.sortBtn}>hold time</button>
-          <button className={styles.sortBtn}>score</button>
-        </div>
-      </section>
-
-      {/* Band 5: Token feed */}
-      <section className={styles.tokenFeed}>
-        {tokens.length === 0 ? (
-          <p className={styles.emptyState}>
-            no tokens yet. be first to launch.
-          </p>
-        ) : (
-          tokens.map((t) => <TokenRow key={t.mint} {...t} />)
-        )}
-      </section>
-
-      {/* Band 6: How to get listed */}
-      <section className={styles.ctaBand}>
-        <p className={styles.ctaText}>
-          launch through a batch auction. if 50+ wallets join and 10+ SOL is
-          committed, your token goes live.
-        </p>
-        <Link href="/launch" className={styles.ctaLink}>
-          launch a token &rarr;
-        </Link>
-      </section>
-    </div>
-  );
+  return <DiscoverClient auctions={auctions} tokens={tokens} />;
 }

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 
 const WalletMultiButton = dynamic(
@@ -22,6 +23,13 @@ const navLinks = [
 export function Nav() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -29,201 +37,129 @@ export function Nav() {
   };
 
   return (
-    <nav
-      style={{
-        height: 64,
-        borderBottom: "1px solid var(--border)",
-        background: "var(--background)",
-        position: "relative",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1152,
-          margin: "0 auto",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 16px",
-          borderLeft: "1px solid var(--border)",
-          borderRight: "1px solid var(--border)",
-        }}
+    <>
+      <motion.nav
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled
+            ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-lg shadow-black/20"
+            : "bg-transparent border-b border-transparent"
+        }`}
       >
-        {/* Left: Logo */}
-        <Link
-          href="/"
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 14,
-            fontWeight: 600,
-            color: "var(--primary)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            textDecoration: "none",
-          }}
-        >
-          PROVE
-        </Link>
+        <div className="max-w-6xl mx-auto h-16 flex items-center justify-between px-4 lg:px-6">
+          {/* Logo */}
+          <Link
+            href="/"
+            className="relative group flex items-center gap-2"
+          >
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 group-hover:bg-primary/30 group-hover:border-primary/50 transition-all duration-300">
+              <span className="text-primary font-bold text-sm">P</span>
+            </div>
+            <span className="font-mono text-sm font-semibold text-primary tracking-widest uppercase">
+              PROVE
+            </span>
+          </Link>
 
-        {/* Center: Nav links (desktop) */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0,
-          }}
-          className="nav-links-desktop"
-        >
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{
-                fontSize: 14,
-                padding: "8px 16px",
-                color: isActive(link.href)
-                  ? "var(--primary)"
-                  : "var(--muted-foreground)",
-                background: isActive(link.href)
-                  ? "rgba(124, 58, 237, 0.1)"
-                  : "transparent",
-                textDecoration: "none",
-                transition: "background 0.15s ease, color 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive(link.href)) {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "rgba(124, 58, 237, 0.08)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive(link.href)) {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "transparent";
-                }
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-
-        {/* Right: Wallet + hamburger */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="wallet-desktop">
-            <WalletMultiButton />
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  isActive(link.href)
+                    ? "text-primary"
+                    : "text-foreground-muted hover:text-foreground hover:bg-white/5"
+                }`}
+              >
+                {link.label}
+                {isActive(link.href) && (
+                  <motion.div
+                    layoutId="nav-indicator"
+                    className="absolute inset-0 rounded-lg bg-primary/10 border border-primary/20"
+                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{link.label}</span>
+              </Link>
+            ))}
           </div>
 
-          {/* Hamburger (mobile) */}
-          <button
-            className="hamburger-btn"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle menu"
-            style={{
-              display: "none",
-              flexDirection: "column",
-              justifyContent: "center",
-              gap: 4,
-              width: 32,
-              height: 32,
-              padding: 4,
-              cursor: "pointer",
-              background: "none",
-              border: "none",
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                width: "100%",
-                height: 2,
-                background: "var(--foreground)",
-                transition: "transform 0.2s ease",
-                transform: menuOpen ? "rotate(45deg) translate(4px, 4px)" : "none",
-              }}
-            />
-            <span
-              style={{
-                display: "block",
-                width: "100%",
-                height: 2,
-                background: "var(--foreground)",
-                opacity: menuOpen ? 0 : 1,
-                transition: "opacity 0.2s ease",
-              }}
-            />
-            <span
-              style={{
-                display: "block",
-                width: "100%",
-                height: 2,
-                background: "var(--foreground)",
-                transition: "transform 0.2s ease",
-                transform: menuOpen ? "rotate(-45deg) translate(4px, -4px)" : "none",
-              }}
-            />
-          </button>
+          {/* Right side */}
+          <div className="flex items-center gap-3">
+            <div className="hidden md:block">
+              <WalletMultiButton />
+            </div>
+
+            {/* Mobile hamburger */}
+            <button
+              className="md:hidden flex flex-col justify-center gap-1.5 w-8 h-8 p-1"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Toggle menu"
+            >
+              <motion.span
+                animate={menuOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
+                className="block w-full h-0.5 bg-foreground rounded-full origin-center"
+                transition={{ duration: 0.2 }}
+              />
+              <motion.span
+                animate={menuOpen ? { opacity: 0, scale: 0 } : { opacity: 1, scale: 1 }}
+                className="block w-full h-0.5 bg-foreground rounded-full"
+                transition={{ duration: 0.15 }}
+              />
+              <motion.span
+                animate={menuOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
+                className="block w-full h-0.5 bg-foreground rounded-full origin-center"
+                transition={{ duration: 0.2 }}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      </motion.nav>
 
       {/* Mobile menu */}
-      {menuOpen && (
-        <div
-          className="mobile-menu"
-          style={{
-            position: "absolute",
-            top: 64,
-            left: 0,
-            right: 0,
-            background: "var(--background)",
-            borderBottom: "1px solid var(--border)",
-            zIndex: 50,
-            display: "none",
-            flexDirection: "column",
-          }}
-        >
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMenuOpen(false)}
-              style={{
-                fontSize: 14,
-                padding: "12px 16px",
-                color: isActive(link.href)
-                  ? "var(--primary)"
-                  : "var(--muted-foreground)",
-                background: isActive(link.href)
-                  ? "rgba(124, 58, 237, 0.1)"
-                  : "transparent",
-                borderBottom: "1px solid var(--border)",
-                textDecoration: "none",
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
-          <div style={{ padding: 16 }}>
-            <WalletMultiButton />
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-xl border-b border-border md:hidden"
+          >
+            <div className="flex flex-col p-4 gap-1">
+              {navLinks.map((link, i) => (
+                <motion.div
+                  key={link.href}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <Link
+                    href={link.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={`block px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      isActive(link.href)
+                        ? "text-primary bg-primary/10"
+                        : "text-foreground-muted hover:text-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                </motion.div>
+              ))}
+              <div className="pt-3 border-t border-border mt-2">
+                <WalletMultiButton />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Responsive styles */}
-      <style>{`
-        .nav-links-desktop { display: flex !important; }
-        .wallet-desktop { display: block !important; }
-        .hamburger-btn { display: none !important; }
-        .mobile-menu { display: none !important; }
-
-        @media (max-width: 768px) {
-          .nav-links-desktop { display: none !important; }
-          .wallet-desktop { display: none !important; }
-          .hamburger-btn { display: flex !important; }
-          .mobile-menu { display: flex !important; }
-        }
-      `}</style>
-    </nav>
+      {/* Spacer for fixed nav */}
+      <div className="h-16" />
+    </>
   );
 }
