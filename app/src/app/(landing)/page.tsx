@@ -157,14 +157,23 @@ export default function LandingPage() {
         />
       </div>
 
+      {/* ── Dark fade over right side so text pops over canvas ── */}
+      <div
+        className="absolute inset-0 z-[1] hidden lg:block pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(to right, transparent 0%, transparent 30%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.85) 70%, rgba(0,0,0,0.95) 100%)",
+        }}
+      />
+
       {/* ── Stars fallback (mobile) ── */}
       <div className="absolute inset-0 w-full h-full lg:hidden stars-bg" />
 
-      {/* ── Corner frame accents ── */}
-      <div className="absolute top-0 left-0 w-8 h-8 lg:w-10 lg:h-10 border-t border-l border-white/20 z-20" />
-      <div className="absolute top-0 right-0 w-8 h-8 lg:w-10 lg:h-10 border-t border-r border-white/20 z-20" />
-      <div className="absolute bottom-16 left-0 w-8 h-8 lg:w-10 lg:h-10 border-b border-l border-white/20 z-20" />
-      <div className="absolute bottom-16 right-0 w-8 h-8 lg:w-10 lg:h-10 border-b border-r border-white/20 z-20" />
+      {/* ── Corner frame accents (subtle) ── */}
+      <div className="absolute top-0 left-0 w-6 h-6 border-t border-l border-white/10 z-20" />
+      <div className="absolute top-0 right-0 w-6 h-6 border-t border-r border-white/10 z-20" />
+      <div className="absolute bottom-14 left-0 w-6 h-6 border-b border-l border-white/10 z-20" />
+      <div className="absolute bottom-14 right-0 w-6 h-6 border-b border-r border-white/10 z-20" />
 
       {/* ═══ Main content ═══ */}
       <div className="relative z-10 h-full flex flex-col">
@@ -313,10 +322,10 @@ export default function LandingPage() {
                       {[...BRANDS, ...BRANDS, ...BRANDS].map((brand, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-2 opacity-50 transition-all hover:opacity-100 hover:scale-105 cursor-default grayscale hover:grayscale-0"
+                          className="flex items-center gap-2 opacity-40 cursor-default"
                         >
-                          <brand.icon className="h-5 w-5 text-white" />
-                          <span className="text-base font-bold text-white tracking-tight">
+                          <brand.icon className="h-4 w-4 text-white/70" />
+                          <span className="text-sm font-medium text-white/70 tracking-tight">
                             {brand.name}
                           </span>
                         </div>
@@ -332,34 +341,16 @@ export default function LandingPage() {
         {/* ── Bottom bar ── */}
         <div className="border-t border-white/10 bg-black/40 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-4 text-[8px] lg:text-[9px] font-mono text-white/40">
-              <span>PROVE.PROTOCOL</span>
-              <div className="hidden sm:flex gap-1">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-0.5 bg-white/20"
-                    style={{
-                      height: `${Math.floor(4 + Math.sin(i * 1.2) * 4 + 4)}px`,
-                    }}
-                  />
-                ))}
-              </div>
-              <span>SOLANA</span>
+            <div className="flex items-center gap-4 text-[9px] font-mono text-white/30">
+              <span>PROVE</span>
+              <span className="hidden sm:inline text-white/15">·</span>
+              <span className="hidden sm:inline">SOLANA</span>
             </div>
-            <div className="flex items-center gap-3 text-[8px] lg:text-[9px] font-mono text-white/40">
-              <span className="hidden sm:inline">◇ BATCH.AUCTION</span>
-              <div className="flex gap-1">
-                <div className="w-1 h-1 bg-white/60 rounded-full animate-pulse" />
-                <div
-                  className="w-1 h-1 bg-white/40 rounded-full animate-pulse"
-                  style={{ animationDelay: "0.2s" }}
-                />
-                <div
-                  className="w-1 h-1 bg-white/20 rounded-full animate-pulse"
-                  style={{ animationDelay: "0.4s" }}
-                />
-              </div>
+            <div className="flex items-center gap-3 text-[9px] font-mono text-white/30">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-50" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500/70" />
+              </span>
               <span>LIVE</span>
             </div>
           </div>
