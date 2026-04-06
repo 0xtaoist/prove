@@ -1,19 +1,19 @@
 /* ═══════════════════════════════════════════
-   DISCOVER PAGE — Savage band layout
+   DISCOVER PAGE — PROVE dark band layout
    ═══════════════════════════════════════════ */
 
 .page {
-  border-left: 1px solid hsl(var(--border));
-  border-right: 1px solid hsl(var(--border));
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   max-width: 1120px;
   margin: 0 auto;
 }
 
 /* ── Band 1: Page header ── */
 .headerBand {
-  background: hsl(var(--sage) / 0.3);
+  background: var(--background-secondary);
   padding: 48px 32px 40px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .kicker {
@@ -22,14 +22,14 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: hsl(var(--primary));
+  color: var(--primary);
   margin-bottom: 8px;
 }
 
 .heading {
   font-size: 32px;
   font-weight: 700;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   line-height: 1.2;
   margin-bottom: 8px;
   text-transform: lowercase;
@@ -37,15 +37,15 @@
 
 .subtitle {
   font-size: 15px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   line-height: 1.5;
 }
 
 /* ── Band 2: Auctions section header ── */
 .auctionHeaderBand {
-  background: hsl(var(--lavender) / 0.3);
+  background: rgba(124, 58, 237, 0.08);
   padding: 20px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -63,7 +63,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .countBadge {
@@ -73,8 +73,8 @@
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
@@ -86,14 +86,14 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .greenDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: hsl(var(--success));
+  background: var(--success);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -104,21 +104,21 @@
 
 /* ── Band 3: Auction list ── */
 .auctionList {
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .emptyState {
   padding: 48px 32px;
   text-align: center;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
 /* ── Band 4: Token feed header ── */
 .feedHeaderBand {
-  background: hsl(var(--cream) / 0.3);
+  background: var(--card);
   padding: 20px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -128,7 +128,7 @@
 
 .sortControls {
   display: inline-flex;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
 }
 
 .sortBtn {
@@ -138,10 +138,10 @@
   font-weight: 600;
   text-transform: lowercase;
   letter-spacing: 0.04em;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   background: transparent;
   border: none;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
   cursor: pointer;
   transition: background-color 0.1s ease, color 0.1s ease;
 }
@@ -151,18 +151,18 @@
 }
 
 .sortBtn:hover {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .sortBtnActive {
   composes: sortBtn;
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 /* ── Band 5: Token feed ── */
 .tokenFeed {
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 /* Skeleton loading */
@@ -171,11 +171,11 @@
   align-items: center;
   gap: 24px;
   padding: 16px 24px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .skeletonBlock {
-  background: hsl(var(--border));
+  background: var(--border);
   height: 16px;
   border-radius: 0;
   animation: shimmer 1.5s ease-in-out infinite;
@@ -213,12 +213,12 @@
 /* ── Band 6: How to get listed ── */
 .ctaBand {
   padding: 40px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .ctaText {
   font-size: 14px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   line-height: 1.7;
   max-width: 600px;
 }
@@ -231,9 +231,9 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: hsl(var(--primary));
+  color: var(--primary);
   text-decoration: none;
-  border-bottom: 1px solid hsl(var(--primary));
+  border-bottom: 1px solid var(--primary);
   padding-bottom: 2px;
   transition: opacity 0.15s ease;
 }

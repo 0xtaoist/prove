@@ -1,23 +1,23 @@
-/* ── Landing page: savage design system ── */
-/* Light-mode, border-centric, no rounded corners, band layout */
+/* ── Landing page: PROVE dark design system ── */
+/* Dark-mode, border-centric, minimal radius, band layout */
 
 .container {
-  border-left: 1px solid hsl(var(--border));
-  border-right: 1px solid hsl(var(--border));
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   max-width: 1200px;
   margin: 0 auto;
 }
 
 /* ── Band base ── */
 .band {
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   padding: 48px 48px;
 }
 
 /* ── Band 1: Hero ── */
 .hero {
   composes: band;
-  background: hsl(var(--lavender) / 0.3);
+  background: var(--background-secondary);
   padding: 64px 48px;
 }
 
@@ -27,7 +27,7 @@
   font-weight: 700;
   line-height: 1.1;
   text-transform: lowercase;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   max-width: 720px;
   margin-bottom: 20px;
 }
@@ -35,7 +35,7 @@
 .heroSub {
   font-size: 17px;
   line-height: 1.6;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   max-width: 560px;
   margin-bottom: 32px;
 }
@@ -52,19 +52,20 @@
   align-items: center;
   justify-content: center;
   padding: 14px 28px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-size: 15px;
   font-weight: 600;
-  border: 1px solid hsl(var(--primary));
-  border-radius: 0;
+  border: 1px solid var(--primary);
+  border-radius: 2px;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: background 0.15s ease;
   text-decoration: none;
 }
 
 .btnPrimary:hover {
-  opacity: 0.9;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .btnOutline {
@@ -73,19 +74,19 @@
   justify-content: center;
   padding: 14px 28px;
   background: transparent;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 15px;
   font-weight: 600;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease;
   text-decoration: none;
 }
 
 .btnOutline:hover {
-  border-color: hsl(var(--primary));
-  color: hsl(var(--primary));
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .statsRow {
@@ -98,10 +99,10 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 500;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   padding-right: 20px;
   margin-right: 20px;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
 }
 
 .stat:last-child {
@@ -118,12 +119,12 @@
 
 .sectionHeaderSage {
   composes: sectionHeader;
-  background: hsl(var(--sage) / 0.3);
+  background: rgba(124, 58, 237, 0.06);
 }
 
 .sectionHeaderCream {
   composes: sectionHeader;
-  background: hsl(var(--cream) / 0.3);
+  background: var(--card);
 }
 
 .kicker {
@@ -132,7 +133,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: hsl(var(--primary));
+  color: var(--primary);
   margin-bottom: 8px;
 }
 
@@ -140,7 +141,7 @@
   font-size: 32px;
   font-weight: 700;
   text-transform: lowercase;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   line-height: 1.2;
 }
 
@@ -148,13 +149,14 @@
 .featuresGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .featureCell {
   padding: 32px 28px;
-  border-right: 1px solid hsl(var(--border));
-  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
 }
 
 .featureCell:nth-child(3n) {
@@ -168,19 +170,20 @@
 .featureIcon {
   width: 44px;
   height: 44px;
-  background: hsl(var(--sage) / 0.4);
+  background: rgba(124, 58, 237, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
   margin-bottom: 16px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
+  border-radius: 2px;
 }
 
 .featureTitle {
   font-size: 15px;
   font-weight: 500;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   text-transform: lowercase;
   margin-bottom: 6px;
 }
@@ -188,13 +191,14 @@
 .featureDesc {
   font-size: 13px;
   line-height: 1.5;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 /* ── Band 5: Flywheel ── */
 .flywheel {
   composes: band;
   overflow-x: auto;
+  background: var(--background-secondary);
 }
 
 .flywheelSteps {
@@ -217,20 +221,20 @@
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  color: hsl(var(--primary));
+  color: var(--primary);
   margin-bottom: 6px;
 }
 
 .flywheelStepLabel {
   font-size: 13px;
   font-weight: 500;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   white-space: nowrap;
 }
 
 .flywheelArrow {
   font-size: 18px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   flex-shrink: 0;
   padding: 0 4px;
   user-select: none;
@@ -240,12 +244,13 @@
 .statsBand {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .statCell {
   padding: 32px 24px;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
+  background: var(--background);
 }
 
 .statCell:last-child {
@@ -256,20 +261,20 @@
   font-family: var(--font-mono);
   font-size: 18px;
   font-weight: 700;
-  color: hsl(var(--foreground));
+  color: var(--primary-hover);
   margin-bottom: 6px;
   line-height: 1.2;
 }
 
 .statLabel {
   font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   line-height: 1.4;
 }
 
 /* ── Band 7: CTA ── */
 .ctaBand {
-  background: hsl(var(--primary));
+  background: var(--primary);
   padding: 64px 48px;
   text-align: center;
 }
@@ -278,13 +283,13 @@
   font-size: 36px;
   font-weight: 700;
   text-transform: lowercase;
-  color: hsl(var(--primary-foreground));
+  color: var(--primary-foreground);
   margin-bottom: 12px;
 }
 
 .ctaSub {
   font-size: 16px;
-  color: hsl(var(--primary-foreground) / 0.8);
+  color: rgba(255, 255, 255, 0.8);
   margin-bottom: 32px;
 }
 
@@ -293,12 +298,12 @@
   align-items: center;
   justify-content: center;
   padding: 14px 32px;
-  background: hsl(var(--background));
-  color: hsl(var(--primary));
+  background: var(--background);
+  color: var(--primary-hover);
   font-size: 15px;
   font-weight: 600;
   border: none;
-  border-radius: 0;
+  border-radius: 2px;
   cursor: pointer;
   transition: opacity 0.15s ease;
   text-decoration: none;
@@ -340,7 +345,7 @@
 
   .featureCell {
     border-right: none;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
   }
 
   .featureCell:last-child {
@@ -356,7 +361,7 @@
   }
 
   .statCell:nth-child(-n + 2) {
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
   }
 
   .flywheelSteps {

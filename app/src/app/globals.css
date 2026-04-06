@@ -1,25 +1,23 @@
 /* ═══════════════════════════════════════════
-   SAVAGE DESIGN SYSTEM
-   Border-centric · Light mode · No radius
+   PROVE DESIGN SYSTEM
+   Dark mode · Border-centric · Terminal aesthetic
    ═══════════════════════════════════════════ */
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 12%;
-  --primary: 270 42% 33%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 110 33% 93%;
-  --muted-foreground: 240 5% 45%;
-  --border: 240 6% 90%;
-  --destructive: 0 84% 60%;
-  --sage: 110 33% 93%;
-  --lavender: 280 33% 93%;
-  --cream: 50 33% 93%;
-  --rose: 10 33% 93%;
-  --success: 142 76% 36%;
-  --warning: 38 92% 50%;
-  --danger: 0 84% 60%;
-  --font-sans: 'Figtree', sans-serif;
+  --background: #0a0a0f;
+  --background-secondary: #12121a;
+  --card: #1a1a2e;
+  --foreground: #e2e8f0;
+  --primary: #7c3aed;
+  --primary-hover: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --muted-foreground: #94a3b8;
+  --border: #2a2a3e;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --destructive: #ef4444;
+  --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
@@ -34,13 +32,13 @@
 
 html {
   scroll-behavior: smooth;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
   font-family: var(--font-sans);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--background);
+  color: var(--foreground);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -92,21 +90,21 @@ select {
 
 /* ── Cards ── */
 .card {
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 16px;
   transition: border-color 0.15s ease;
 }
 
 .card:hover {
-  border-color: hsl(var(--primary));
+  border-color: var(--primary);
 }
 
 .card-flat {
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0;
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   padding: 16px;
 }
 
@@ -117,7 +115,7 @@ select {
   justify-content: center;
   gap: 8px;
   padding: 10px 20px;
-  border-radius: 0;
+  border-radius: 2px;
   font-size: 14px;
   font-weight: 600;
   transition: background-color 0.15s ease, opacity 0.15s ease;
@@ -131,40 +129,41 @@ select {
 }
 
 .btn-primary {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .btn-secondary {
-  background: hsl(var(--sage));
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: hsl(var(--primary));
+  border-color: var(--primary);
 }
 
 .btn-outline {
   background: transparent;
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
+  color: var(--foreground);
+  border-color: var(--border);
 }
 
 .btn-outline:hover:not(:disabled) {
-  border-color: hsl(var(--primary));
-  color: hsl(var(--primary));
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .btn-danger {
-  background: hsl(var(--danger));
+  background: var(--danger);
   color: #fff;
-  border-color: hsl(var(--danger));
+  border-color: var(--danger);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -187,7 +186,7 @@ select {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 0;
+  border-radius: 2px;
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-mono);
@@ -195,66 +194,61 @@ select {
   letter-spacing: 0.05em;
 }
 
-.badge-sage {
-  background: hsl(var(--sage));
-  color: hsl(var(--foreground));
+.badge-primary {
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--primary-hover);
 }
 
-.badge-lavender {
-  background: hsl(var(--lavender));
-  color: hsl(var(--foreground));
+.badge-subtle {
+  background: var(--card);
+  color: var(--foreground);
 }
 
-.badge-cream {
-  background: hsl(var(--cream));
-  color: hsl(var(--foreground));
-}
-
-.badge-rose {
-  background: hsl(var(--rose));
-  color: hsl(var(--foreground));
+.badge-muted {
+  background: var(--background-secondary);
+  color: var(--muted-foreground);
 }
 
 .badge-outline {
   background: transparent;
-  border: 1px solid hsl(var(--border));
-  color: hsl(var(--muted-foreground));
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
 
 .badge-success {
-  background: hsl(var(--success) / 0.12);
-  color: hsl(var(--success));
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
 }
 
 .badge-danger {
-  background: hsl(var(--danger) / 0.12);
-  color: hsl(var(--danger));
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
 }
 
 .badge-warning {
-  background: hsl(var(--warning) / 0.12);
-  color: hsl(var(--warning));
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
 }
 
 /* ── Inputs ── */
 .input {
   width: 100%;
   padding: 10px 14px;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0;
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
   font-size: 14px;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   transition: border-color 0.15s ease;
 }
 
 .input:focus {
-  border-color: hsl(var(--primary));
+  border-color: var(--primary);
   outline: none;
 }
 
 .input::placeholder {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .input-mono {
@@ -263,94 +257,94 @@ select {
 
 /* ── Utilities ── */
 .text-muted {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .text-primary {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 
 .text-success {
-  color: hsl(var(--success));
+  color: var(--success);
 }
 
 .text-danger {
-  color: hsl(var(--danger));
+  color: var(--danger);
 }
 
 .text-warning {
-  color: hsl(var(--warning));
+  color: var(--warning);
 }
 
-/* ── Scrollbar (light theme) ── */
+/* ── Scrollbar (dark theme) ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
+  background: var(--border);
   border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: var(--muted-foreground);
 }
 
-/* ── Wallet adapter overrides (savage) ── */
+/* ── Wallet adapter overrides (PROVE dark) ── */
 .wallet-adapter-button {
   font-family: var(--font-mono) !important;
   font-size: 13px !important;
   height: 38px !important;
-  border-radius: 0 !important;
-  background-color: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
+  border-radius: 2px !important;
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
 }
 
 .wallet-adapter-button:hover {
-  opacity: 0.9 !important;
+  background-color: var(--primary-hover) !important;
 }
 
 .wallet-adapter-modal-wrapper {
-  background-color: hsl(var(--background)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  border-radius: 0 !important;
-  color: hsl(var(--foreground)) !important;
+  background-color: var(--background-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 2px !important;
+  color: var(--foreground) !important;
 }
 
 .wallet-adapter-modal-title {
   font-family: var(--font-mono) !important;
-  color: hsl(var(--foreground)) !important;
+  color: var(--foreground) !important;
 }
 
 .wallet-adapter-modal-list li {
-  border-radius: 0 !important;
+  border-radius: 2px !important;
 }
 
 .wallet-adapter-modal-list .wallet-adapter-button {
-  border-radius: 0 !important;
+  border-radius: 2px !important;
 }
 
 .wallet-adapter-button-trigger {
-  background-color: hsl(var(--primary)) !important;
-  border-radius: 0 !important;
+  background-color: var(--primary) !important;
+  border-radius: 2px !important;
 }
 
 .wallet-adapter-dropdown-list {
-  border-radius: 0 !important;
-  background: hsl(var(--background)) !important;
-  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 2px !important;
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .wallet-adapter-dropdown-list-item {
-  border-radius: 0 !important;
-  color: hsl(var(--foreground)) !important;
+  border-radius: 2px !important;
+  color: var(--foreground) !important;
 }
 
 .wallet-adapter-dropdown-list-item:hover {
-  background: hsl(var(--sage)) !important;
+  background: var(--card) !important;
 }

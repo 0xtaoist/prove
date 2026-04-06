@@ -1,16 +1,16 @@
 /* ── Container ── */
 .page {
-  border-left: 1px solid hsl(var(--border));
-  border-right: 1px solid hsl(var(--border));
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
 }
 
 /* ── Band 1: Token Header ── */
 .bandHeader {
-  background: hsl(var(--background));
+  background: var(--background);
   padding: 32px 32px 24px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -26,36 +26,35 @@
 }
 
 .ticker {
-  font-family: hsl(var(--font-mono));
   font-family: var(--font-mono);
   font-size: 36px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   line-height: 1;
 }
 
 .tokenName {
   font-size: 16px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin-top: 4px;
 }
 
 .creatorLink {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   margin-top: 2px;
 }
 
 .creatorLink a {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .creatorLink a:hover {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 
 .headerRight {
@@ -72,42 +71,42 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: 0;
 }
 
 .badgeSage {
-  background: hsl(var(--sage));
-  color: hsl(var(--foreground));
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--primary-hover);
 }
 
 .badgeLavender {
-  background: hsl(var(--lavender));
-  color: hsl(var(--foreground));
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--primary-hover);
 }
 
 .badgeCream {
-  background: hsl(var(--cream));
-  color: hsl(var(--foreground));
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .badgeRose {
-  background: hsl(var(--rose));
-  color: hsl(var(--foreground));
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
 }
 
 .batchPrice {
   width: 100%;
   font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-family: var(--font-mono);
   margin-top: 4px;
 }
 
 /* ── Band 2: Price + Stats ── */
 .bandStats {
-  background: hsl(var(--sage) / 0.3);
-  border-bottom: 1px solid hsl(var(--border));
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--border);
 }
 
 .statsGrid {
@@ -129,8 +128,8 @@
 
 .statCell {
   padding: 20px 24px;
-  border-right: 1px solid hsl(var(--border));
-  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .statCell:last-child {
@@ -141,7 +140,7 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: hsl(var(--muted-foreground));
+  color: var(--primary);
   margin-bottom: 6px;
 }
 
@@ -149,7 +148,7 @@
   font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .statChange {
@@ -160,17 +159,17 @@
 }
 
 .statChangePositive {
-  color: hsl(var(--success));
+  color: var(--success);
 }
 
 .statChangeNegative {
-  color: hsl(var(--danger));
+  color: var(--danger);
 }
 
 /* ── Band 3: Trade Widget Area ── */
 .bandTrade {
-  background: hsl(var(--background));
-  border-bottom: 1px solid hsl(var(--border));
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 400px;
 }
@@ -183,7 +182,7 @@
 
 .chartArea {
   padding: 32px;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -193,7 +192,7 @@
 @media (max-width: 900px) {
   .chartArea {
     border-right: none;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
     min-height: 200px;
   }
 }
@@ -202,21 +201,21 @@
   width: 100%;
   height: 100%;
   min-height: 260px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 14px;
-  background: hsl(var(--sage) / 0.15);
+  background: var(--background-secondary);
 }
 
 /* ── Band 4: Quest Section Header ── */
 .bandQuestHeader {
-  background: hsl(var(--lavender) / 0.3);
+  background: rgba(124, 58, 237, 0.08);
   padding: 16px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .kicker {
@@ -224,19 +223,19 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: hsl(var(--foreground));
+  color: var(--primary);
   font-family: var(--font-mono);
 }
 
 /* ── Band 5: Quest List ── */
 .bandQuests {
-  background: hsl(var(--background));
-  border-bottom: 1px solid hsl(var(--border));
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
 
 .questRow {
   padding: 20px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 200px 80px 140px;
   align-items: center;
@@ -263,12 +262,12 @@
 .questName {
   font-weight: 600;
   font-size: 14px;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .questDesc {
   font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .questProgressWrap {
@@ -280,26 +279,26 @@
 .questProgressTrack {
   flex: 1;
   height: 4px;
-  background: hsl(var(--border));
+  background: var(--border);
   border-radius: 0;
   overflow: hidden;
 }
 
 .questProgressFill {
   height: 100%;
-  background: hsl(var(--primary));
+  background: var(--primary);
   border-radius: 0;
   transition: width 0.3s ease;
 }
 
 .questProgressFillComplete {
-  background: hsl(var(--success));
+  background: var(--success);
 }
 
 .questNumbers {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   white-space: nowrap;
 }
 
@@ -311,31 +310,31 @@
 }
 
 .questStatusDone {
-  color: hsl(var(--success));
+  color: var(--success);
 }
 
 .questStatusProgress {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .questReward {
   font-size: 12px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-style: italic;
 }
 
 /* ── Band 6: Creator Section Header ── */
 .bandCreatorHeader {
-  background: hsl(var(--cream) / 0.3);
+  background: var(--card);
   padding: 16px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 /* ── Band 7: Creator Info ── */
 .bandCreator {
-  background: hsl(var(--background));
+  background: var(--background);
   padding: 24px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
   gap: 32px;
@@ -351,31 +350,31 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .creatorStatValue {
   font-family: var(--font-mono);
   font-size: 16px;
   font-weight: 600;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .creatorStatValue a {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .creatorStatValue a:hover {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 
 /* ── Band 8: Top Holders ── */
 .bandHoldersHeader {
-  background: hsl(var(--sage) / 0.15);
+  background: var(--background-secondary);
   padding: 16px 32px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .holderTable {
@@ -388,9 +387,9 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   padding: 12px 24px;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
   font-weight: 600;
 }
 
@@ -398,8 +397,8 @@
   padding: 12px 24px;
   font-size: 14px;
   font-family: var(--font-mono);
-  color: hsl(var(--foreground));
-  border-bottom: 1px solid hsl(var(--border));
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
 }
 
 .holderTable tbody tr:last-child td {
@@ -407,15 +406,15 @@
 }
 
 .holderTable tbody tr:hover td {
-  background: hsl(var(--sage) / 0.2);
+  background: rgba(124, 58, 237, 0.06);
 }
 
 .holderTable td a {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .holderTable td a:hover {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }

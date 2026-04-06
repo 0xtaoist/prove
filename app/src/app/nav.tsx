@@ -32,8 +32,8 @@ export function Nav() {
     <nav
       style={{
         height: 64,
-        borderBottom: "1px solid hsl(var(--border))",
-        background: "hsl(var(--background))",
+        borderBottom: "1px solid var(--border)",
+        background: "var(--background)",
         position: "relative",
       }}
     >
@@ -46,8 +46,8 @@ export function Nav() {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 16px",
-          borderLeft: "1px solid hsl(var(--border))",
-          borderRight: "1px solid hsl(var(--border))",
+          borderLeft: "1px solid var(--border)",
+          borderRight: "1px solid var(--border)",
         }}
       >
         {/* Left: Logo */}
@@ -57,7 +57,7 @@ export function Nav() {
             fontFamily: "var(--font-mono)",
             fontSize: 14,
             fontWeight: 600,
-            color: "hsl(var(--primary))",
+            color: "var(--primary)",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             textDecoration: "none",
@@ -83,10 +83,10 @@ export function Nav() {
                 fontSize: 14,
                 padding: "8px 16px",
                 color: isActive(link.href)
-                  ? "hsl(var(--primary))"
-                  : "hsl(var(--muted-foreground))",
+                  ? "var(--primary)"
+                  : "var(--muted-foreground)",
                 background: isActive(link.href)
-                  ? "hsl(var(--sage) / 0.2)"
+                  ? "rgba(124, 58, 237, 0.1)"
                   : "transparent",
                 textDecoration: "none",
                 transition: "background 0.15s ease, color 0.15s ease",
@@ -94,7 +94,7 @@ export function Nav() {
               onMouseEnter={(e) => {
                 if (!isActive(link.href)) {
                   (e.currentTarget as HTMLElement).style.background =
-                    "hsl(var(--sage) / 0.15)";
+                    "rgba(124, 58, 237, 0.08)";
                 }
               }}
               onMouseLeave={(e) => {
@@ -138,7 +138,7 @@ export function Nav() {
                 display: "block",
                 width: "100%",
                 height: 2,
-                background: "hsl(var(--foreground))",
+                background: "var(--foreground)",
                 transition: "transform 0.2s ease",
                 transform: menuOpen ? "rotate(45deg) translate(4px, 4px)" : "none",
               }}
@@ -148,7 +148,7 @@ export function Nav() {
                 display: "block",
                 width: "100%",
                 height: 2,
-                background: "hsl(var(--foreground))",
+                background: "var(--foreground)",
                 opacity: menuOpen ? 0 : 1,
                 transition: "opacity 0.2s ease",
               }}
@@ -158,7 +158,7 @@ export function Nav() {
                 display: "block",
                 width: "100%",
                 height: 2,
-                background: "hsl(var(--foreground))",
+                background: "var(--foreground)",
                 transition: "transform 0.2s ease",
                 transform: menuOpen ? "rotate(-45deg) translate(4px, -4px)" : "none",
               }}
@@ -176,8 +176,8 @@ export function Nav() {
             top: 64,
             left: 0,
             right: 0,
-            background: "hsl(var(--background))",
-            borderBottom: "1px solid hsl(var(--border))",
+            background: "var(--background)",
+            borderBottom: "1px solid var(--border)",
             zIndex: 50,
             display: "none",
             flexDirection: "column",
@@ -192,12 +192,12 @@ export function Nav() {
                 fontSize: 14,
                 padding: "12px 16px",
                 color: isActive(link.href)
-                  ? "hsl(var(--primary))"
-                  : "hsl(var(--muted-foreground))",
+                  ? "var(--primary)"
+                  : "var(--muted-foreground)",
                 background: isActive(link.href)
-                  ? "hsl(var(--sage) / 0.2)"
+                  ? "rgba(124, 58, 237, 0.1)"
                   : "transparent",
-                borderBottom: "1px solid hsl(var(--border))",
+                borderBottom: "1px solid var(--border)",
                 textDecoration: "none",
               }}
             >
