@@ -227,7 +227,7 @@ export default async function TokenPage({
         <div className={styles.chartArea}>
           <div className={styles.chartPlaceholder}>Chart coming soon</div>
         </div>
-        <TradeWidget ticker={data.ticker} currentPrice={data.price} />
+        <TradeWidget ticker={data.ticker} mint={mint} currentPrice={data.price} />
       </div>
 
       {/* ── Band 4: Quest Board Header ── */}
