@@ -4,7 +4,7 @@ buildCommand = "pnpm --filter @prove/common build && pnpm --filter @prove/quest-
 watchPatterns = ["services/quest-verifier/**", "packages/common/**"]
 
 [deploy]
-startCommand = "cd services/quest-verifier && pnpm start"
+startCommand = "cd services/quest-verifier && npx prisma generate && node dist/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

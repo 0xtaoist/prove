@@ -4,7 +4,7 @@ buildCommand = "pnpm --filter @prove/common build && pnpm --filter @prove/indexe
 watchPatterns = ["services/indexer/**", "packages/common/**"]
 
 [deploy]
-startCommand = "cd services/indexer && pnpm start"
+startCommand = "cd services/indexer && npx prisma migrate deploy && node dist/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
