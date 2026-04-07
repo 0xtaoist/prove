@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Timer,
 } from "lucide-react";
+import { TextMarquee } from "@/components/ui/text-marquee";
 
 /* ── Solana ecosystem marquee brands ── */
 
@@ -119,7 +120,7 @@ export default function LandingPage() {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes marquee {
+        @keyframes marqueeX {
           from { transform: translateX(0); }
           to { transform: translateX(-50%); }
         }
@@ -127,8 +128,8 @@ export default function LandingPage() {
           animation: fadeSlideIn 0.8s ease-out forwards;
           opacity: 0;
         }
-        .animate-marquee {
-          animation: marquee 40s linear infinite;
+        .animate-marquee-x {
+          animation: marqueeX 40s linear infinite;
         }
         .delay-100 { animation-delay: 0.1s; }
         .delay-200 { animation-delay: 0.2s; }
@@ -157,12 +158,12 @@ export default function LandingPage() {
         />
       </div>
 
-      {/* ── Dark fade over left side so text pops, Sisyphus stays visible on right ── */}
+      {/* ── Dark fade over left side — weaker so Sisyphus shows more ── */}
       <div
         className="absolute inset-0 z-[1] hidden lg:block pointer-events-none"
         style={{
           background:
-            "linear-gradient(to right, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.8) 35%, rgba(0,0,0,0.45) 55%, transparent 75%, transparent 100%)",
+            "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.65) 30%, rgba(0,0,0,0.3) 50%, transparent 70%, transparent 100%)",
         }}
       />
 
@@ -181,35 +182,46 @@ export default function LandingPage() {
           <div className="relative z-10 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-16">
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-8 items-start">
               {/* ── LEFT COLUMN: Hero text ── */}
-              <div className="lg:col-span-7 flex flex-col justify-center space-y-7 pt-4 lg:pt-8">
-                {/* Badge */}
+              <div className="lg:col-span-7 flex flex-col justify-center space-y-6 pt-4 lg:pt-8">
+                {/* Vertical text marquee — "How do I..." */}
                 <div className="animate-fade-in delay-100">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-md transition-colors hover:bg-white/10">
-                    <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
-                      Built on Solana
-                      <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400" />
-                    </span>
-                  </div>
+                  <TextMarquee
+                    prefix={
+                      <span className="text-base sm:text-lg font-medium text-zinc-500 mr-1">
+                        How do I...
+                      </span>
+                    }
+                    height={36}
+                    speed={0.8}
+                    className="text-base sm:text-lg font-medium text-zinc-300"
+                  >
+                    <span>build a token community?</span>
+                    <span>launch fairly without snipers?</span>
+                    <span>bring on diamond hands?</span>
+                    <span>get more token exposure?</span>
+                    <span>create the next 100x?</span>
+                  </TextMarquee>
                 </div>
 
                 {/* Heading */}
-                <h1
-                  className="animate-fade-in delay-200 text-4xl sm:text-5xl lg:text-7xl xl:text-8xl font-medium tracking-tighter leading-[0.9]"
-                  style={{
-                    maskImage:
-                      "linear-gradient(180deg, black 0%, black 80%, transparent 100%)",
-                    WebkitMaskImage:
-                      "linear-gradient(180deg, black 0%, black 80%, transparent 100%)",
-                  }}
-                >
-                  <span className="bg-gradient-to-br from-purple-300 via-white to-white bg-clip-text text-transparent" style={{ filter: "drop-shadow(0 0 30px rgba(168,85,247,0.4))" }}>prove</span>{" "}
+                <h1 className="animate-fade-in delay-200 text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-medium tracking-tighter leading-[0.9]">
+                  just{" "}
+                  <span
+                    className="bg-gradient-to-br from-purple-300 via-purple-400 to-white bg-clip-text text-transparent"
+                    style={{
+                      filter: "drop-shadow(0 0 30px rgba(168,85,247,0.5))",
+                    }}
+                  >
+                    prove
+                  </span>{" "}
                   it.
                 </h1>
 
                 {/* Description */}
                 <p className="animate-fade-in delay-300 max-w-xl text-base sm:text-lg text-zinc-400 leading-relaxed">
-                  The launchpad where everyone gets the same price. No bots. No
-                  bundlers. Creators earn by building.
+                  The launchpad where tokens prove themselves through building
+                  and community growth. No AI slop. No PvP. Just tokens that
+                  prove their worth.
                 </p>
 
                 {/* CTA Buttons */}
@@ -230,13 +242,14 @@ export default function LandingPage() {
                   </Link>
                 </div>
 
-                {/* How it works link */}
+                {/* How it works link — slightly larger */}
                 <div className="animate-fade-in delay-500">
                   <Link
                     href="/how-it-works"
-                    className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs font-mono transition-colors"
+                    className="inline-flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
                   >
-                    how it works <span className="text-[10px]">→</span>
+                    how it works
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
               </div>
@@ -315,7 +328,7 @@ export default function LandingPage() {
                         "linear-gradient(to right, transparent, black 20%, black 80%, transparent)",
                     }}
                   >
-                    <div className="animate-marquee flex gap-12 whitespace-nowrap px-4">
+                    <div className="animate-marquee-x flex gap-12 whitespace-nowrap px-4">
                       {[...BRANDS, ...BRANDS, ...BRANDS].map((brand, i) => (
                         <div
                           key={i}
@@ -340,7 +353,7 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-4 text-[9px] font-mono text-white/30">
               <span>PROVE</span>
-              <span className="hidden sm:inline text-white/15">·</span>
+              <span className="hidden sm:inline text-white/15">&middot;</span>
               <span className="hidden sm:inline">SOLANA</span>
             </div>
             <div className="flex items-center gap-3 text-[9px] font-mono text-white/30">
