@@ -32,15 +32,15 @@ export function TextMarquee({
         `}
       </style>
       <div className={cn("flex relative", className)}>
-        <div className="flex relative overflow-hidden flex-row gap-1 items-center w-min h-min">
+        <div className="flex relative overflow-hidden flex-row gap-1 items-center h-min">
           {prefix && (
-            <div className="whitespace-pre size-auto relative">
+            <div className="whitespace-nowrap shrink-0 size-auto relative">
               {prefix}
             </div>
           )}
           <div
-            className="opacity-100 mask-[linear-gradient(rgba(0,0,0,0)_0%,rgb(0,0,0)_43.6902%,rgba(0,0,0,0)_100%)] relative w-auto overflow-hidden"
-            style={{ height: `${height}px` }}
+            className="opacity-100 mask-[linear-gradient(rgba(0,0,0,0)_0%,rgb(0,0,0)_43.6902%,rgba(0,0,0,0)_100%)] relative overflow-hidden"
+            style={{ height: `${height}px`, minWidth: "280px" }}
           >
             <div
               className="relative h-full"
@@ -52,7 +52,7 @@ export function TextMarquee({
               {React.Children.map(children, (child, index) => (
                 <div
                   key={index}
-                  className="flex items-center"
+                  className="flex items-center whitespace-nowrap"
                   style={{
                     height: `${height}px`,
                     "--index": index,
