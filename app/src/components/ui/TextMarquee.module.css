@@ -1,0 +1,56 @@
+@keyframes slide-vertical {
+  to {
+    translate: 0 var(--destination);
+  }
+}
+
+.wrapper {
+  display: flex;
+  position: relative;
+}
+
+.inner {
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+  width: min-content;
+  height: min-content;
+}
+
+.prefix {
+  white-space: pre;
+  position: relative;
+}
+
+.mask {
+  opacity: 1;
+  mask-image: linear-gradient(
+    rgba(0, 0, 0, 0) 0%,
+    rgb(0, 0, 0) 35%,
+    rgb(0, 0, 0) 65%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    rgba(0, 0, 0, 0) 0%,
+    rgb(0, 0, 0) 35%,
+    rgb(0, 0, 0) 65%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  position: relative;
+  width: auto;
+  overflow: hidden;
+}
+
+.track {
+  position: relative;
+  height: 100%;
+}
+
+.item {
+  height: 48px;
+  display: flex;
+  align-items: center;
+}
