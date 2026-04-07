@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-devnet.sh — Build and deploy all 5 PROVE programs to Solana devnet.
+# deploy-devnet.sh — Build and deploy all 4 PROVE programs to Solana devnet.
 # Usage: ./scripts/deploy-devnet.sh
 set -euo pipefail
 
@@ -8,7 +8,7 @@ DEPLOY_DIR="$ROOT/target/deploy"
 ENV_FILE="$ROOT/.env.programs"
 
 # ── Program names (must match Anchor.toml / Cargo package names) ─────────
-PROGRAMS=(batch_auction fee_router stake_manager ticker_registry prove_amm)
+PROGRAMS=(batch_auction fee_router stake_manager ticker_registry)
 
 # ── Preflight checks ────────────────────────────────────────────────────
 echo "==> Checking required tools..."

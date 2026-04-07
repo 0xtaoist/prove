@@ -153,6 +153,9 @@ pub mod batch_auction {
     }
 
     /// Permissionless crank: finalize auction after end_time.
+    /// On success, the auction transitions to Succeeded state. A separate
+    /// permissionless crank (off-chain) will then create a Raydium CPMM pool
+    /// using the auction's SOL + tokens and call `set_pool_id` to record it.
     pub fn finalize_auction(ctx: Context<FinalizeAuction>) -> Result<()> {
         let auction = &ctx.accounts.auction;
         let config = &ctx.accounts.config;
@@ -260,6 +263,18 @@ pub mod batch_auction {
 
         Ok(())
     }
+
+    /// Record the Raydium pool address after it has been created off-chain.
+    /// Can be called once by anyone after the auction has succeeded.
+    pub fn set_pool_id(ctx: Context<SetPoolId>, pool_id: Pubkey) -> Result<()> {
+        let auction = &mut ctx.accounts.auction;
+        require!(auction.state == AuctionState::Succeeded, BatchAuctionError::InvalidState);
+        require!(!auction.pool_created, BatchAuctionError::PoolAlreadyCreated);
+        auction.pool_id = pool_id;
+        auction.pool_created = true;
+        auction.state = AuctionState::Trading;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -312,13 +327,16 @@ pub struct Auction {
     pub state: AuctionState,
     pub stake_returned: bool,
     pub uniform_price: u64,
+    pub pool_id: Pubkey,        // Raydium pool address, set after pool creation
+    pub pool_created: bool,     // Whether the Raydium pool has been created
     pub bump: u8,
 }
 
 impl Auction {
     // discriminator(8) + pubkey(32) + pubkey(32) + string prefix(4) + max_ticker(10)
-    // + i64(8) + i64(8) + u64(8) + u64(8) + u16(2) + enum(1) + bool(1) + u64(8) + u8(1)
-    pub const LEN: usize = 8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 1 + 8 + 1;
+    // + i64(8) + i64(8) + u64(8) + u64(8) + u16(2) + enum(1) + bool(1) + u64(8)
+    // + pubkey(32) [pool_id] + bool(1) [pool_created] + u8(1)
+    pub const LEN: usize = 8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 1 + 8 + 32 + 1 + 1;
 }
 
 #[account]
@@ -507,6 +525,19 @@ pub struct Refund<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct SetPoolId<'info> {
+    #[account(
+        mut,
+        seeds = [b"auction", auction.mint.as_ref()],
+        bump = auction.bump,
+    )]
+    pub auction: Account<'info, Auction>,
+
+    /// Anyone can call this to record the Raydium pool address.
+    pub caller: Signer<'info>,
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -541,4 +572,8 @@ pub enum BatchAuctionError {
     UnauthorizedParticipant,
     #[msg("Invalid mint for this auction")]
     InvalidMint,
+    #[msg("Auction is not in a valid state for this operation")]
+    InvalidState,
+    #[msg("Raydium pool has already been created for this auction")]
+    PoolAlreadyCreated,
 }

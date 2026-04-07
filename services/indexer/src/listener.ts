@@ -2,12 +2,13 @@ import { Connection, PublicKey, Logs } from "@solana/web3.js";
 import { prisma } from "./db";
 
 // Program IDs
+// Note: ProveAMM has been removed. Swap tracking now comes from Raydium events
+// via the Raydium CPMM program or Jupiter aggregator logs.
 const PROGRAMS = {
   BatchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
   FeeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
   StakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
   TickerRegistry: new PublicKey("Tick111111111111111111111111111111111111111"),
-  ProveAMM: new PublicKey("PAMM111111111111111111111111111111111111111"),
 } as const;
 
 // Reconnection config
@@ -97,9 +98,6 @@ async function handleLogs(program: ProgramName, logs: Logs): Promise<void> {
         break;
       case "TickerRegistry":
         await handleTickerRegistryEvent(message, signature);
-        break;
-      case "ProveAMM":
-        await handleProveAMMEvent(message, signature);
         break;
     }
   }
@@ -198,78 +196,6 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
     }
   } catch (err) {
     console.error("[listener] BatchAuction event error:", err, { log, signature });
-  }
-}
-
-// ─── ProveAMM Events ───────────────────────────────────────
-
-async function handleProveAMMEvent(log: string, signature: string): Promise<void> {
-  try {
-    if (log.includes("SwapExecuted")) {
-      const data = parseEventData(log);
-      if (!data) return;
-
-      const isBuy = data.direction === "buy";
-
-      await prisma.swap.upsert({
-        where: { signature },
-        create: {
-          auctionMint: data.mint,
-          wallet: data.wallet,
-          isBuy,
-          solAmount: BigInt(data.sol_amount),
-          tokenAmount: BigInt(data.token_amount),
-          creatorFee: BigInt(data.creator_fee ?? "0"),
-          protocolFee: BigInt(data.protocol_fee ?? "0"),
-          price: BigInt(data.price),
-          signature,
-          timestamp: new Date(),
-        },
-        update: {},
-      });
-
-      // Update holder snapshot
-      if (isBuy) {
-        await prisma.holderSnapshot.upsert({
-          where: { mint_wallet: { mint: data.mint, wallet: data.wallet } },
-          create: {
-            mint: data.mint,
-            wallet: data.wallet,
-            balance: BigInt(data.token_amount),
-            firstSeen: new Date(),
-          },
-          update: {
-            balance: { increment: BigInt(data.token_amount) },
-            lastUpdated: new Date(),
-          },
-        });
-      } else {
-        // Sell - decrement balance
-        const holder = await prisma.holderSnapshot.findUnique({
-          where: { mint_wallet: { mint: data.mint, wallet: data.wallet } },
-        });
-        if (holder) {
-          const newBalance = holder.balance - BigInt(data.token_amount);
-          await prisma.holderSnapshot.update({
-            where: { mint_wallet: { mint: data.mint, wallet: data.wallet } },
-            data: {
-              balance: newBalance < BigInt(0) ? BigInt(0) : newBalance,
-              lastUpdated: new Date(),
-            },
-          });
-        }
-      }
-
-      // Transition auction to TRADING on first swap
-      await prisma.auction.updateMany({
-        where: { mint: data.mint, state: "SUCCEEDED" },
-        data: { state: "TRADING" },
-      });
-
-      console.log(`[listener] Swap: ${data.wallet} ${isBuy ? "buy" : "sell"} on ${data.mint}`);
-    }
-  } catch (err) {
-    console.error("[listener] ProveAMM event error:", err, { log, signature });
   }
 }
 

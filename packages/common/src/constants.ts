@@ -1,6 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
 
-// Platform fee configuration
+// Fee Architecture:
+// - Raydium CLMM pool with 1% fee tier (cannot be bypassed)
+// - LP position owned by FeeRouter PDA
+// - Fees claimed periodically and split:
+//   CREATOR_FEE_BPS (80) = 0.8% of all trading volume to creator
+//   PROTOCOL_FEE_BPS (20) = 0.2% of all trading volume to protocol
 export const CREATOR_FEE_BPS = 80; // 0.8%
 export const PROTOCOL_FEE_BPS = 20; // 0.2%
 export const TOTAL_FEE_BPS = 100; // 1.0%
@@ -32,12 +37,13 @@ export const FEED_WEIGHT_HOLD_TIME = 0.2;
 export const FEED_WEIGHT_QUESTS = 0.1;
 
 // Program IDs (placeholder - replace with deployed addresses)
+// Post-auction liquidity pools are created on Raydium CLMM (concentrated liquidity).
 export const PROGRAM_IDS = {
   batchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
   feeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
   stakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
   tickerRegistry: new PublicKey("Tick111111111111111111111111111111111111111"),
-  proveAmm: new PublicKey("PAMM111111111111111111111111111111111111111"),
+  raydiumClmm: new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), // Raydium CLMM
 } as const;
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;

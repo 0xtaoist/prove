@@ -34,6 +34,7 @@ export interface Auction {
   stakeReturned: boolean;
   ticker: string;
   uniformPrice: bigint | null;
+  poolAddress: string | null; // Raydium pool address, set after pool creation
 }
 
 export interface Commitment {
@@ -55,6 +56,7 @@ export interface TokenStats {
   questsCompleted: number;
   createdAt: number;
   feedScore: number;
+  raydiumPoolId: string | null; // Raydium pool address, null if pool not yet created
 }
 
 export interface ProveScore {

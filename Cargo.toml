@@ -4,7 +4,6 @@ members = [
     "programs/fee-router",
     "programs/stake-manager",
     "programs/ticker-registry",
-    "programs/prove-amm",
 ]
 resolver = "2"
 

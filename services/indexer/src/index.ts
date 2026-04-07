@@ -3,6 +3,7 @@ import cors from "cors";
 import apiRouter from "./api";
 import { startListener, stopListener } from "./listener";
 import { startScoreCalculator } from "./score";
+import { startFeeCollector } from "./fee-collector";
 import { prisma } from "./db";
 
 const app = express();
@@ -36,9 +37,13 @@ const server = app.listen(PORT, () => {
 
   // Start hourly score calculator
   scoreTimer = startScoreCalculator();
+
+  // Start fee collection crank (every 15 minutes)
+  feeTimer = startFeeCollector();
 });
 
 let scoreTimer: NodeJS.Timeout | undefined;
+let feeTimer: NodeJS.Timeout | undefined;
 
 // ─── Graceful shutdown (Railway sends SIGTERM on deploy) ────
 async function shutdown(signal: string): Promise<void> {
@@ -51,6 +56,7 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop background tasks
   if (scoreTimer) clearInterval(scoreTimer);
+  if (feeTimer) clearInterval(feeTimer);
   stopListener();
 
   // Close database connection

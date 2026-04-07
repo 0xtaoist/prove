@@ -22,6 +22,7 @@ model Auction {
   state            AuctionState  @default(GATHERING)
   uniformPrice     BigInt?
   stakeReturned    Boolean       @default(false)
+  raydiumPoolId    String?
   tokenName        String?
   tokenImage       String?
   description      String?

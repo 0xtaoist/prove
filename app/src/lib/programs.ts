@@ -6,12 +6,12 @@ import { Connection, PublicKey } from "@solana/web3.js";
 
 export const BATCH_AUCTION_PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID ??
-    "Biprzf2NK3XXNi7aVXB13P4sbRURZWrJ7TUn8k1VXKy3",
+    "BAuc111111111111111111111111111111111111111",
 );
 
-export const PROVE_AMM_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_PROVE_AMM_PROGRAM_ID ??
-    "34smKfDK7KzAYkMhTGw31aAPVgn3KzkZpuBCXiQXk9o5",
+// Raydium CLMM for concentrated liquidity pool creation
+export const RAYDIUM_CLMM_PROGRAM_ID = new PublicKey(
+  "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
 );
 
 // ---------------------------------------------------------------------------
@@ -71,13 +71,6 @@ export function getCommitmentPDA(
   );
 }
 
-export function getPoolPDA(mint: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("pool"), mint.toBuffer()],
-    PROVE_AMM_PROGRAM_ID,
-  );
-}
-
 export function getStakePDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("stake"), mint.toBuffer()],
@@ -95,8 +88,20 @@ export function getTickerPDA(ticker: string): [PublicKey, number] {
 export function getFeeConfigPDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("fee_config"), mint.toBuffer()],
-    PROVE_AMM_PROGRAM_ID,
+    BATCH_AUCTION_PROGRAM_ID,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Raydium swap URL helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a Jupiter aggregator URL for swapping the given token.
+ * Jupiter routes through Raydium CPMM pools automatically.
+ */
+export function getRaydiumSwapUrl(mint: string): string {
+  return `https://jup.ag/swap/SOL-${mint}`;
 }
 
 // ---------------------------------------------------------------------------

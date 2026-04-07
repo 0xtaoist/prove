@@ -7,17 +7,16 @@ import {
 } from "@solana/web3.js";
 import {
   BATCH_AUCTION_PROGRAM_ID,
-  PROVE_AMM_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   SYSTEM_PROGRAM_ID,
   RENT_SYSVAR,
   getAuctionPDA,
   getCommitmentPDA,
-  getPoolPDA,
   getStakePDA,
   getTickerPDA,
   getFeeConfigPDA,
   getAssociatedTokenAddress,
+  getRaydiumSwapUrl,
 } from "./programs";
 
 // ---------------------------------------------------------------------------
@@ -248,56 +247,9 @@ export async function buildRefundTx(
 }
 
 // ---------------------------------------------------------------------------
-// 5. Swap (ProveAMM)
+// 5. Swap — now handled via Raydium / Jupiter
 // ---------------------------------------------------------------------------
-
-/**
- * Build a transaction that calls `swap` on the ProveAMM program.
- *
- * Accounts:
- *   0. user               (signer, mut)
- *   1. pool PDA           (mut)
- *   2. fee_config PDA     (readonly)
- *   3. mint               (readonly)
- *   4. user token ATA     (mut)
- *   5. pool token vault   (mut) – pool PDA's ATA for the mint
- *   6. token_program
- *   7. system_program
- */
-export async function buildSwapTx(
-  user: PublicKey,
-  poolMint: PublicKey,
-  amountIn: number,
-  isBuy: boolean,
-  minAmountOut: number,
-): Promise<Transaction> {
-  const [poolPDA] = getPoolPDA(poolMint);
-  const [feeConfigPDA] = getFeeConfigPDA(poolMint);
-  const userAta = getAssociatedTokenAddress(poolMint, user);
-  const poolVault = getAssociatedTokenAddress(poolMint, poolPDA);
-
-  const discriminator = await anchorDiscriminator("swap");
-  const data = Buffer.concat([
-    discriminator,
-    encodeU64(Math.round(amountIn * LAMPORTS_PER_SOL)),
-    encodeBool(isBuy),
-    encodeU64(Math.round(minAmountOut * LAMPORTS_PER_SOL)),
-  ]);
-
-  const ix = new TransactionInstruction({
-    programId: PROVE_AMM_PROGRAM_ID,
-    keys: [
-      { pubkey: user, isSigner: true, isWritable: true },
-      { pubkey: poolPDA, isSigner: false, isWritable: true },
-      { pubkey: feeConfigPDA, isSigner: false, isWritable: false },
-      { pubkey: poolMint, isSigner: false, isWritable: false },
-      { pubkey: userAta, isSigner: false, isWritable: true },
-      { pubkey: poolVault, isSigner: false, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
-    ],
-    data,
-  });
-
-  return new Transaction().add(ix);
-}
+// Swaps are no longer built as on-chain transactions through our program.
+// Users trade on Jupiter (jup.ag) or Raydium directly.
+// Use getRaydiumSwapUrl(mint) from programs.ts to get the swap URL.
+export { getRaydiumSwapUrl };
