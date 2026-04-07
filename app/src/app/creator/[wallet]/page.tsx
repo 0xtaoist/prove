@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import styles from "./page.module.css";
+import { motion } from "framer-motion";
+import { Reveal } from "@/components/motion";
 
 /* ── Helpers ── */
 
@@ -52,82 +53,28 @@ function getCreatorData() {
     totalWithdrawn: 20_000_000_000,
     pending: 8_400_000_000,
     tokens: [
-      {
-        mint: "abc123",
-        ticker: "$PROVE",
-        dailyVolume: 12_500_000_000,
-        dailyFees: 100_000_000,
-        totalFees: 15_800_000_000,
-        holders: 1_247,
-        stakeStatus: "Escrowed",
-      },
-      {
-        mint: "def456",
-        ticker: "$ALPHA",
-        dailyVolume: 6_200_000_000,
-        dailyFees: 49_600_000,
-        totalFees: 8_200_000_000,
-        holders: 834,
-        stakeStatus: "Returned",
-      },
-      {
-        mint: "ghi789",
-        ticker: "$BETA",
-        dailyVolume: 2_100_000_000,
-        dailyFees: 16_800_000,
-        totalFees: 4_400_000_000,
-        holders: 421,
-        stakeStatus: "Escrowed",
-      },
+      { mint: "abc123", ticker: "$PROVE", dailyVolume: 12_500_000_000, dailyFees: 100_000_000, totalFees: 15_800_000_000, holders: 1_247, stakeStatus: "Escrowed" },
+      { mint: "def456", ticker: "$ALPHA", dailyVolume: 6_200_000_000, dailyFees: 49_600_000, totalFees: 8_200_000_000, holders: 834, stakeStatus: "Returned" },
+      { mint: "ghi789", ticker: "$BETA", dailyVolume: 2_100_000_000, dailyFees: 16_800_000, totalFees: 4_400_000_000, holders: 421, stakeStatus: "Escrowed" },
     ] satisfies TokenBreakdown[],
     stakes: [
-      {
-        ticker: "$PROVE",
-        status: "Escrowed",
-        deadline: "2026-05-01",
-        amount: 5_000_000_000,
-      },
-      {
-        ticker: "$ALPHA",
-        status: "Returned",
-        deadline: "2026-03-15",
-        amount: 3_000_000_000,
-      },
-      {
-        ticker: "$BETA",
-        status: "Escrowed",
-        deadline: "2026-06-10",
-        amount: 2_000_000_000,
-      },
+      { ticker: "$PROVE", status: "Escrowed", deadline: "2026-05-01", amount: 5_000_000_000 },
+      { ticker: "$ALPHA", status: "Returned", deadline: "2026-03-15", amount: 3_000_000_000 },
+      { ticker: "$BETA", status: "Escrowed", deadline: "2026-06-10", amount: 2_000_000_000 },
     ] satisfies StakeInfo[],
     launches: [
-      {
-        ticker: "$PROVE",
-        mint: "abc123",
-        outcome: "succeeded",
-        participants: 342,
-        solRaised: 1_250_000_000_000,
-        date: "2026-03-01",
-      },
-      {
-        ticker: "$ALPHA",
-        mint: "def456",
-        outcome: "succeeded",
-        participants: 218,
-        solRaised: 800_000_000_000,
-        date: "2026-02-15",
-      },
-      {
-        ticker: "$GAMMA",
-        mint: "jkl012",
-        outcome: "failed",
-        participants: 45,
-        solRaised: 120_000_000_000,
-        date: "2026-01-20",
-      },
+      { ticker: "$PROVE", mint: "abc123", outcome: "succeeded", participants: 342, solRaised: 1_250_000_000_000, date: "2026-03-01" },
+      { ticker: "$ALPHA", mint: "def456", outcome: "succeeded", participants: 218, solRaised: 800_000_000_000, date: "2026-02-15" },
+      { ticker: "$GAMMA", mint: "jkl012", outcome: "failed", participants: 45, solRaised: 120_000_000_000, date: "2026-01-20" },
     ] satisfies LaunchRecord[],
   };
 }
+
+const STAKE_COLORS: Record<string, string> = {
+  Escrowed: "badge-warning",
+  Returned: "badge-success",
+  Forfeited: "badge-danger",
+};
 
 /* ── Page ── */
 
@@ -138,16 +85,18 @@ export default function CreatorPage() {
 
   if (!BASE58_RE.test(wallet)) {
     return (
-      <div className={styles.walletPrompt}>
-        <p>Invalid wallet address.</p>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-foreground-muted">Invalid wallet address.</p>
       </div>
     );
   }
 
   if (!connected) {
     return (
-      <div className={styles.walletPrompt}>
-        <p>Connect your wallet to view the creator dashboard.</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-foreground-muted">
+          Connect your wallet to view the creator dashboard.
+        </p>
         <WalletMultiButton />
       </div>
     );
@@ -157,154 +106,207 @@ export default function CreatorPage() {
 
   const handleWithdraw = async () => {
     setWithdrawing(true);
-    // Placeholder for withdraw transaction
     setTimeout(() => setWithdrawing(false), 2000);
   };
 
   return (
-    <div className={styles.page}>
-      {/* Earnings Overview */}
-      <div className={styles.earningsCard}>
-        <h2 className={styles.earningsTitle}>Earnings Overview</h2>
-        <div className={styles.earningsStat}>
-          <span className={styles.earningsLabel}>Total Earned</span>
-          <span className={styles.earningsValue}>
-            {formatSol(data.totalFees)} SOL
-          </span>
-        </div>
-        <div className={styles.earningsStat}>
-          <span className={styles.earningsLabel}>Withdrawn</span>
-          <span className={styles.earningsValueSmall}>
-            {formatSol(data.totalWithdrawn)} SOL
-          </span>
-        </div>
-        <div className={styles.earningsStat}>
-          <span className={styles.earningsLabel}>Pending</span>
-          <span className={styles.earningsValue} style={{ color: "var(--success)" }}>
-            {formatSol(data.pending)} SOL
-          </span>
+    <div className="max-w-5xl mx-auto px-4 lg:px-6 pb-20">
+      {/* ── Earnings Overview ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="glass-card p-6 lg:p-8 mt-10 bg-gradient-to-br from-primary/5 to-transparent"
+      >
+        <h2 className="text-lg font-bold text-foreground mb-6">
+          Earnings Overview
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+          <div>
+            <span className="block text-[10px] uppercase tracking-wider text-foreground-muted font-mono mb-1">
+              Total Earned
+            </span>
+            <span className="block font-mono text-2xl font-bold text-foreground">
+              {formatSol(data.totalFees)} SOL
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] uppercase tracking-wider text-foreground-muted font-mono mb-1">
+              Withdrawn
+            </span>
+            <span className="block font-mono text-lg font-semibold text-foreground-muted">
+              {formatSol(data.totalWithdrawn)} SOL
+            </span>
+          </div>
+          <div>
+            <span className="block text-[10px] uppercase tracking-wider text-foreground-muted font-mono mb-1">
+              Pending
+            </span>
+            <span className="block font-mono text-xl font-bold text-success">
+              {formatSol(data.pending)} SOL
+            </span>
+          </div>
         </div>
         <button
-          className={styles.withdrawBtn}
+          className="btn-primary"
           disabled={data.pending <= 0 || withdrawing}
           onClick={handleWithdraw}
         >
           {withdrawing ? "Withdrawing..." : "Withdraw All"}
         </button>
-      </div>
+      </motion.div>
 
-      {/* Per-token breakdown */}
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>Token Breakdown</h2>
-        <div style={{ overflowX: "auto" }}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Token</th>
-                <th>Daily Volume</th>
-                <th>Daily Fees</th>
-                <th>Total Fees</th>
-                <th>Holders</th>
-                <th>Stake</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.tokens.map((t) => (
-                <tr key={t.mint}>
-                  <td>
-                    <Link href={`/token/${t.mint}`}>{t.ticker}</Link>
-                  </td>
-                  <td>{formatSol(t.dailyVolume)} SOL</td>
-                  <td>{formatSol(t.dailyFees)} SOL</td>
-                  <td>{formatSol(t.totalFees)} SOL</td>
-                  <td>{t.holders.toLocaleString()}</td>
-                  <td>
-                    <span
-                      className={`${styles.stakeStatus} ${
-                        t.stakeStatus === "Escrowed"
-                          ? styles.stakeEscrowed
-                          : t.stakeStatus === "Returned"
-                            ? styles.stakeReturned
-                            : styles.stakeForfeited
-                      }`}
-                    >
-                      {t.stakeStatus}
-                    </span>
-                  </td>
+      {/* ── Token Breakdown ── */}
+      <Reveal className="mt-10">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
+          Token Breakdown
+        </h2>
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50">
+                  {["Token", "Daily Vol", "Daily Fees", "Total Fees", "Holders", "Stake"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left px-5 py-3 text-[10px] uppercase tracking-wider text-foreground-muted font-mono font-semibold"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.tokens.map((t) => (
+                  <tr
+                    key={t.mint}
+                    className="border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/token/${t.mint}`}
+                        className="font-mono text-primary hover:text-primary-light transition-colors"
+                      >
+                        {t.ticker}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {formatSol(t.dailyVolume)} SOL
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {formatSol(t.dailyFees)} SOL
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {formatSol(t.totalFees)} SOL
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {t.holders.toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`badge ${STAKE_COLORS[t.stakeStatus] ?? ""}`}>
+                        {t.stakeStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </Reveal>
 
-      {/* Stake Status */}
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>Stake Status</h2>
-        <div className={styles.stakeList}>
+      {/* ── Stake Status ── */}
+      <Reveal className="mt-10">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
+          Stake Status
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {data.stakes.map((s) => (
-            <div key={s.ticker} className={styles.stakeCard}>
-              <span className={styles.stakeToken}>{s.ticker}</span>
-              <span
-                className={`${styles.stakeStatus} ${
-                  s.status === "Escrowed"
-                    ? styles.stakeEscrowed
-                    : s.status === "Returned"
-                      ? styles.stakeReturned
-                      : styles.stakeForfeited
-                }`}
-              >
-                {s.status}
-              </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 14 }}>
+            <div key={s.ticker} className="glass-card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono text-sm font-bold text-foreground">
+                  {s.ticker}
+                </span>
+                <span className={`badge ${STAKE_COLORS[s.status] ?? ""}`}>
+                  {s.status}
+                </span>
+              </div>
+              <span className="block font-mono text-lg font-bold text-foreground mb-1">
                 {formatSol(s.amount)} SOL
               </span>
-              <span className={styles.stakeCountdown}>
+              <span className="block text-xs text-foreground-muted">
                 Deadline: {s.deadline}
               </span>
             </div>
           ))}
         </div>
-      </div>
+      </Reveal>
 
-      {/* Launch History */}
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>Launch History</h2>
-        <div style={{ overflowX: "auto" }}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Token</th>
-                <th>Outcome</th>
-                <th>Participants</th>
-                <th>SOL Raised</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.launches.map((l) => (
-                <tr key={l.mint}>
-                  <td>
-                    <Link href={`/token/${l.mint}`}>{l.ticker}</Link>
-                  </td>
-                  <td
-                    className={
-                      l.outcome === "succeeded"
-                        ? styles.outcomeSuccess
-                        : styles.outcomeFailed
-                    }
-                  >
-                    {l.outcome}
-                  </td>
-                  <td>{l.participants.toLocaleString()}</td>
-                  <td>{formatSol(l.solRaised)} SOL</td>
-                  <td>{l.date}</td>
+      {/* ── Launch History ── */}
+      <Reveal className="mt-10">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
+          Launch History
+        </h2>
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50">
+                  {["Token", "Outcome", "Participants", "SOL Raised", "Date"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left px-5 py-3 text-[10px] uppercase tracking-wider text-foreground-muted font-mono font-semibold"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.launches.map((l) => (
+                  <tr
+                    key={l.mint}
+                    className="border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors"
+                  >
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/token/${l.mint}`}
+                        className="font-mono text-primary hover:text-primary-light transition-colors"
+                      >
+                        {l.ticker}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`badge ${
+                          l.outcome === "succeeded"
+                            ? "badge-success"
+                            : "badge-danger"
+                        }`}
+                      >
+                        {l.outcome}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {l.participants.toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3 font-mono">
+                      {formatSol(l.solRaised)} SOL
+                    </td>
+                    <td className="px-5 py-3 font-mono text-foreground-muted">
+                      {l.date}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </Reveal>
     </div>
   );
 }

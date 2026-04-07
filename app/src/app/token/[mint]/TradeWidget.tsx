@@ -7,7 +7,7 @@ import styles from "./TradeWidget.module.css";
 interface TradeWidgetProps {
   ticker: string;
   mint: string;
-  currentPrice: number; // lamports per token
+  currentPrice: number;
 }
 
 export function TradeWidget({ ticker, mint, currentPrice }: TradeWidgetProps) {
@@ -21,13 +21,13 @@ export function TradeWidget({ ticker, mint, currentPrice }: TradeWidgetProps) {
       {/* Tabs */}
       <div className={styles.tabs}>
         <button
-          className={`${styles.tab} ${side === "buy" ? styles.tabActiveBuy : ""}`}
+          className={`${styles.tab} ${side === "buy" ? styles.tabBuyActive : ""}`}
           onClick={() => setSide("buy")}
         >
           Buy
         </button>
         <button
-          className={`${styles.tab} ${side === "sell" ? styles.tabActiveSell : ""}`}
+          className={`${styles.tab} ${side === "sell" ? styles.tabSellActive : ""}`}
           onClick={() => setSide("sell")}
         >
           Sell

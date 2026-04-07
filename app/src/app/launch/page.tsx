@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuction } from "../../hooks/useAuction";
-import styles from "./page.module.css";
 
 interface FormData {
   ticker: string;
@@ -59,12 +60,8 @@ export default function LaunchPage() {
     } else if (!TICKER_RE.test(form.ticker)) {
       errs.ticker = "Ticker must be 1-10 characters, A-Z and 0-9 only";
     }
-    if (!form.name.trim()) {
-      errs.name = "Token name is required";
-    }
-    if (!form.description.trim()) {
-      errs.description = "Description is required";
-    }
+    if (!form.name.trim()) errs.name = "Token name is required";
+    if (!form.description.trim()) errs.description = "Description is required";
     const supply = Number(form.totalSupply);
     if (!form.totalSupply || isNaN(supply) || supply <= 0) {
       errs.totalSupply = "Enter a valid positive number";
@@ -91,7 +88,6 @@ export default function LaunchPage() {
     } else {
       setForm((prev) => ({ ...prev, [field]: value }));
     }
-    // Clear field error on change
     if (errors[field as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
@@ -105,75 +101,94 @@ export default function LaunchPage() {
     `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 
   return (
-    <div className={styles.page}>
-      <h1 className={styles.title}>Launch a Token</h1>
-      <p className={styles.subtitle}>
-        Create a fair-launch token with a batch auction. Stake 2 SOL to begin.
-      </p>
+    <div className="max-w-2xl mx-auto px-4 lg:px-6 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Launch a Token
+        </h1>
+        <p className="text-foreground-muted mb-10">
+          Create a fair-launch token with a batch auction. Stake 2 SOL to begin.
+        </p>
+      </motion.div>
 
-      <form className={styles.form} onSubmit={handleSubmit} noValidate>
+      <motion.form
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.15 }}
+        className="space-y-6"
+        onSubmit={handleSubmit}
+        noValidate
+      >
         {/* Ticker */}
-        <div className={styles.fieldGroup}>
-          <label className={styles.label} htmlFor="ticker">
+        <div>
+          <label htmlFor="ticker" className="block text-sm font-medium text-foreground mb-2">
             Ticker
           </label>
           <input
             id="ticker"
             name="ticker"
-            className={styles.inputMono}
+            className="input font-mono"
             placeholder="e.g. PROVE"
             value={form.ticker}
             onChange={handleChange}
             maxLength={10}
             autoComplete="off"
           />
-          {errors.ticker && <span className={styles.error}>{errors.ticker}</span>}
+          {errors.ticker && (
+            <p className="text-xs text-danger mt-1.5">{errors.ticker}</p>
+          )}
         </div>
 
         {/* Name */}
-        <div className={styles.fieldGroup}>
-          <label className={styles.label} htmlFor="name">
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
             Token Name
           </label>
           <input
             id="name"
             name="name"
-            className={styles.input}
+            className="input"
             placeholder="e.g. Prove Protocol"
             value={form.name}
             onChange={handleChange}
           />
-          {errors.name && <span className={styles.error}>{errors.name}</span>}
+          {errors.name && (
+            <p className="text-xs text-danger mt-1.5">{errors.name}</p>
+          )}
         </div>
 
         {/* Description */}
-        <div className={styles.fieldGroup}>
-          <label className={styles.label} htmlFor="description">
+        <div>
+          <label htmlFor="description" className="block text-sm font-medium text-foreground mb-2">
             Description
           </label>
           <textarea
             id="description"
             name="description"
-            className={styles.textarea}
+            className="input min-h-[100px] resize-y"
             placeholder="What is this token about?"
             value={form.description}
             onChange={handleChange}
             rows={4}
           />
           {errors.description && (
-            <span className={styles.error}>{errors.description}</span>
+            <p className="text-xs text-danger mt-1.5">{errors.description}</p>
           )}
         </div>
 
         {/* Total Supply */}
-        <div className={styles.fieldGroup}>
-          <label className={styles.label} htmlFor="totalSupply">
+        <div>
+          <label htmlFor="totalSupply" className="block text-sm font-medium text-foreground mb-2">
             Total Supply
           </label>
           <input
             id="totalSupply"
             name="totalSupply"
-            className={styles.inputMono}
+            className="input font-mono"
             placeholder="e.g. 1000000000"
             type="number"
             min="1"
@@ -182,53 +197,70 @@ export default function LaunchPage() {
             onChange={handleChange}
           />
           {errors.totalSupply && (
-            <span className={styles.error}>{errors.totalSupply}</span>
+            <p className="text-xs text-danger mt-1.5">{errors.totalSupply}</p>
           )}
         </div>
 
         {/* Image */}
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>Token Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            className={styles.fileInput}
-            onChange={handleFile}
-          />
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Token Image
+          </label>
+          <div className="glass-card p-4">
+            <input
+              type="file"
+              accept="image/*"
+              className="text-sm text-foreground-muted file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20 file:cursor-pointer file:transition-colors"
+              onChange={handleFile}
+            />
+          </div>
         </div>
 
         {/* Fee Breakdown */}
-        <div className={styles.feeBox}>
-          <div className={styles.feeTitle}>Fee Breakdown</div>
-          <div className={styles.feeRow}>
-            <span className={styles.feeLabel}>Creator Stake</span>
-            <span className={styles.feeValue}>2.00 SOL</span>
+        <div className="glass-card p-5 bg-gradient-to-br from-primary/5 to-transparent">
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Fee Breakdown
+          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-foreground-muted">Creator Stake</span>
+            <span className="font-mono text-sm font-semibold text-foreground">
+              2.00 SOL
+            </span>
           </div>
-          <p className={styles.feeNote}>
+          <p className="text-xs text-foreground-muted/70 leading-relaxed">
             Refundable if the token reaches 100 unique holders within 72 hours
             of the auction completing.
           </p>
         </div>
 
         {/* Wallet Info */}
-        {connected && publicKey && (
-          <div className={styles.walletInfo}>
-            <div>
-              <div className={styles.walletLabel}>Connected Wallet</div>
-              <div className={styles.walletAddress}>
-                {truncateAddress(publicKey.toBase58())}
+        <AnimatePresence>
+          {connected && publicKey && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="glass-card p-5 flex items-center justify-between"
+            >
+              <div>
+                <span className="block text-[10px] uppercase tracking-wider text-foreground-muted font-mono mb-1">
+                  Connected Wallet
+                </span>
+                <span className="font-mono text-sm text-foreground">
+                  {truncateAddress(publicKey.toBase58())}
+                </span>
               </div>
-            </div>
-            <div className={styles.walletBalance}>
-              {balance !== null ? `${balance.toFixed(4)} SOL` : "..."}
-            </div>
-          </div>
-        )}
+              <span className="font-mono text-sm font-semibold text-foreground">
+                {balance !== null ? `${balance.toFixed(4)} SOL` : "..."}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Submit */}
         <button
           type="submit"
-          className={styles.submitBtn}
+          className="btn-primary w-full py-4 text-base"
           disabled={!connected || auctionLoading}
         >
           {auctionLoading
@@ -239,76 +271,92 @@ export default function LaunchPage() {
         </button>
 
         {auctionError && (
-          <p className={styles.error} style={{ marginTop: 8 }}>
-            {auctionError}
-          </p>
+          <p className="text-xs text-danger mt-2">{auctionError}</p>
         )}
         {auctionSig && (
-          <p style={{ marginTop: 8, color: "#4caf50", fontSize: 14 }}>
+          <p className="text-xs text-success mt-2 font-mono">
             Success! Tx: {auctionSig.slice(0, 16)}...
           </p>
         )}
-      </form>
+      </motion.form>
 
-      {/* Confirmation Modal */}
-      {showModal && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => setShowModal(false)}
-        >
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2 className={styles.modalTitle}>Confirm Launch</h2>
-            <div className={styles.modalRow}>
-              <span className={styles.modalLabel}>Ticker</span>
-              <span className={styles.modalValue}>${form.ticker}</span>
-            </div>
-            <div className={styles.modalRow}>
-              <span className={styles.modalLabel}>Name</span>
-              <span className={styles.modalValue}>{form.name}</span>
-            </div>
-            <div className={styles.modalRow}>
-              <span className={styles.modalLabel}>Supply</span>
-              <span className={styles.modalValue}>
-                {Number(form.totalSupply).toLocaleString()}
-              </span>
-            </div>
-            <div className={styles.modalRow}>
-              <span className={styles.modalLabel}>Stake</span>
-              <span className={styles.modalValue}>{STAKE_AMOUNT} SOL</span>
-            </div>
-            {form.image && (
-              <div className={styles.modalRow}>
-                <span className={styles.modalLabel}>Image</span>
-                <span className={styles.modalValue}>{form.image.name}</span>
+      {/* ── Confirmation Modal ── */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="glass-card p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-bold text-foreground mb-5">
+                Confirm Launch
+              </h2>
+
+              <div className="space-y-3 mb-6">
+                {[
+                  { label: "Ticker", value: `$${form.ticker}` },
+                  { label: "Name", value: form.name },
+                  {
+                    label: "Supply",
+                    value: Number(form.totalSupply).toLocaleString(),
+                  },
+                  { label: "Stake", value: `${STAKE_AMOUNT} SOL` },
+                  ...(form.image
+                    ? [{ label: "Image", value: form.image.name }]
+                    : []),
+                ].map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
+                  >
+                    <span className="text-sm text-foreground-muted">
+                      {row.label}
+                    </span>
+                    <span className="font-mono text-sm font-semibold text-foreground">
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
               </div>
-            )}
-            <div className={styles.modalActions}>
-              <button
-                className={styles.modalCancel}
-                onClick={() => setShowModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className={styles.modalConfirm}
-                disabled={auctionLoading}
-                onClick={async () => {
-                  const sig = await createAuction(
-                    form.ticker,
-                    Number(form.totalSupply),
-                  );
-                  setShowModal(false);
-                  if (sig) {
-                    alert(`Auction created! Signature: ${sig}`);
-                  }
-                }}
-              >
-                {auctionLoading ? "Sending..." : "Confirm Launch"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+              <div className="flex gap-3">
+                <button
+                  className="btn-outline flex-1"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary flex-1"
+                  disabled={auctionLoading}
+                  onClick={async () => {
+                    const sig = await createAuction(
+                      form.ticker,
+                      Number(form.totalSupply),
+                    );
+                    setShowModal(false);
+                    if (sig) {
+                      alert(`Auction created! Signature: ${sig}`);
+                    }
+                  }}
+                >
+                  {auctionLoading ? "Sending..." : "Confirm Launch"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

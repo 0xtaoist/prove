@@ -1,8 +1,6 @@
 import { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TradeWidget } from "./TradeWidget";
-import styles from "./page.module.css";
+import { TokenDetailClient } from "./TokenDetailClient";
 
 /* ── Helpers ── */
 
@@ -40,11 +38,11 @@ function getTokenData(mint: string) {
     name: "Prove Token",
     creatorFull: "8xDf2abc1234def5678ghijklmnopqrstuv9r4Kp",
     badges: [
-      { label: "Verified", variant: "sage" as const },
-      { label: "Diamond Hands", variant: "lavender" as const },
-      { label: "Active", variant: "cream" as const },
-    ] as Array<{ label: string; variant: string }>,
-    price: 42_500_000, // lamports
+      { label: "Verified", variant: "primary" as const },
+      { label: "Diamond Hands", variant: "success" as const },
+      { label: "Active", variant: "warning" as const },
+    ],
+    price: 42_500_000,
     change24h: 12.4,
     stats: {
       holders: 1_247,
@@ -54,51 +52,11 @@ function getTokenData(mint: string) {
       batchPrice: 38_000_000,
     },
     quests: [
-      {
-        id: "q1",
-        name: "Holder Milestone",
-        description: "Reach 100 unique holders",
-        current: 78,
-        target: 100,
-        completed: false,
-        reward: "Unlocks community badge for all holders",
-      },
-      {
-        id: "q2",
-        name: "Hold Time",
-        description: "Average hold time reaches 12 hours",
-        current: 8,
-        target: 12,
-        completed: false,
-        reward: "Fee discount for early holders",
-      },
-      {
-        id: "q3",
-        name: "Price Above Batch",
-        description: "Maintain price above batch auction price for 48 hours",
-        current: 32,
-        target: 48,
-        completed: false,
-        reward: "Creator earns bonus allocation",
-      },
-      {
-        id: "q4",
-        name: "X Posts",
-        description: "Community generates 50 posts mentioning $PROVE",
-        current: 50,
-        target: 50,
-        completed: true,
-        reward: "Unlocks social verification badge",
-      },
-      {
-        id: "q5",
-        name: "Graduation",
-        description: "Reach 200 holders and complete 3 other quests",
-        current: 1,
-        target: 4,
-        completed: false,
-        reward: "Token graduates to full DEX listing",
-      },
+      { id: "q1", name: "Holder Milestone", description: "Reach 100 unique holders", current: 78, target: 100, completed: false, reward: "Unlocks community badge for all holders" },
+      { id: "q2", name: "Hold Time", description: "Average hold time reaches 12 hours", current: 8, target: 12, completed: false, reward: "Fee discount for early holders" },
+      { id: "q3", name: "Price Above Batch", description: "Maintain price above batch auction price for 48 hours", current: 32, target: 48, completed: false, reward: "Creator earns bonus allocation" },
+      { id: "q4", name: "X Posts", description: "Community generates 50 posts mentioning $PROVE", current: 50, target: 50, completed: true, reward: "Unlocks social verification badge" },
+      { id: "q5", name: "Graduation", description: "Reach 200 holders and complete 3 other quests", current: 1, target: 4, completed: false, reward: "Token graduates to full DEX listing" },
     ] as QuestItem[],
     creatorStats: {
       totalFeesEarned: 15_800_000_000,
@@ -121,15 +79,6 @@ function getTokenData(mint: string) {
   };
 }
 
-/* ── Badge variant map ── */
-
-const BADGE_VARIANT: Record<string, string> = {
-  sage: styles.badgeSage,
-  lavender: styles.badgeLavender,
-  cream: styles.badgeCream,
-  rose: styles.badgeRose,
-};
-
 /* ── Page ── */
 
 export async function generateMetadata({
@@ -138,9 +87,9 @@ export async function generateMetadata({
   params: Promise<{ mint: string }>;
 }): Promise<Metadata> {
   const { mint } = await params;
-  if (!BASE58_RE.test(mint)) return { title: "Not Found — PROVE" };
+  if (!BASE58_RE.test(mint)) return { title: "Not Found \u2014 PROVE" };
   const data = getTokenData(mint);
-  return { title: `${data.ticker} — PROVE` };
+  return { title: `${data.ticker} \u2014 PROVE` };
 }
 
 export default async function TokenPage({
@@ -151,187 +100,19 @@ export default async function TokenPage({
   const { mint } = await params;
   if (!BASE58_RE.test(mint)) notFound();
   const data = getTokenData(mint);
-  const isPositive = data.change24h >= 0;
 
   return (
-    <div className={styles.page}>
-      {/* ── Band 1: Token Header ── */}
-      <div className={styles.bandHeader}>
-        <div className={styles.headerLeft}>
-          <span className={styles.ticker}>{data.ticker}</span>
-          <span className={styles.tokenName}>{data.name}</span>
-          <span className={styles.creatorLink}>
-            Creator:{" "}
-            <Link href={`/creator/${data.creatorFull}`}>
-              {shortenAddress(data.creatorFull)}
-            </Link>
-          </span>
-        </div>
-        <div className={styles.headerRight}>
-          {data.badges.map((b) => (
-            <span
-              key={b.label}
-              className={`${styles.badge} ${BADGE_VARIANT[b.variant] ?? ""}`}
-            >
-              {b.label}
-            </span>
-          ))}
-        </div>
-        <span className={styles.batchPrice}>
-          Batch auction price: {formatSol(data.stats.batchPrice)} SOL
-        </span>
-      </div>
-
-      {/* ── Band 2: Price + Stats ── */}
-      <div className={styles.bandStats}>
-        <div className={styles.statsGrid}>
-          <div className={styles.statCell}>
-            <div className={styles.statLabel}>Current Price</div>
-            <div className={styles.statValue}>
-              {formatSol(data.price)} SOL
-              <span
-                className={`${styles.statChange} ${isPositive ? styles.statChangePositive : styles.statChangeNegative}`}
-              >
-                {isPositive ? "+" : ""}
-                {data.change24h.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-          <div className={styles.statCell}>
-            <div className={styles.statLabel}>Holders</div>
-            <div className={styles.statValue}>
-              {data.stats.holders.toLocaleString()}
-            </div>
-          </div>
-          <div className={styles.statCell}>
-            <div className={styles.statLabel}>24h Volume</div>
-            <div className={styles.statValue}>
-              {formatSol(data.stats.volume24h)} SOL
-            </div>
-          </div>
-          <div className={styles.statCell}>
-            <div className={styles.statLabel}>Market Cap</div>
-            <div className={styles.statValue}>
-              {formatSol(data.stats.marketCap)} SOL
-            </div>
-          </div>
-          <div className={styles.statCell}>
-            <div className={styles.statLabel}>Avg Hold Time</div>
-            <div className={styles.statValue}>{data.stats.avgHoldTime}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Band 3: Trade Widget ── */}
-      <div className={styles.bandTrade}>
-        <div className={styles.chartArea}>
-          <div className={styles.chartPlaceholder}>Chart coming soon</div>
-        </div>
-        <TradeWidget ticker={data.ticker} mint={mint} currentPrice={data.price} />
-      </div>
-
-      {/* ── Band 4: Quest Board Header ── */}
-      <div className={styles.bandQuestHeader}>
-        <span className={styles.kicker}>QUESTS</span>
-      </div>
-
-      {/* ── Band 5: Quest List ── */}
-      <div className={styles.bandQuests}>
-        {data.quests.map((q) => {
-          const pct = Math.min(100, Math.round((q.current / q.target) * 100));
-          return (
-            <div key={q.id} className={styles.questRow}>
-              <div className={styles.questInfo}>
-                <span className={styles.questName}>{q.name}</span>
-                <span className={styles.questDesc}>{q.description}</span>
-              </div>
-              <div className={styles.questProgressWrap}>
-                <div className={styles.questProgressTrack}>
-                  <div
-                    className={`${styles.questProgressFill} ${q.completed ? styles.questProgressFillComplete : ""}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span className={styles.questNumbers}>
-                  {q.current}/{q.target}
-                </span>
-              </div>
-              <span
-                className={`${styles.questStatus} ${q.completed ? styles.questStatusDone : styles.questStatusProgress}`}
-              >
-                {q.completed ? "\u2713" : `${pct}%`}
-              </span>
-              <span className={styles.questReward}>{q.reward}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Band 6: Creator Section Header ── */}
-      <div className={styles.bandCreatorHeader}>
-        <span className={styles.kicker}>CREATOR</span>
-      </div>
-
-      {/* ── Band 7: Creator Info ── */}
-      <div className={styles.bandCreator}>
-        <div className={styles.creatorStat}>
-          <span className={styles.creatorStatLabel}>Wallet</span>
-          <span className={styles.creatorStatValue}>
-            <Link href={`/creator/${data.creatorFull}`}>
-              {shortenAddress(data.creatorFull)}
-            </Link>
-          </span>
-        </div>
-        <div className={styles.creatorStat}>
-          <span className={styles.creatorStatLabel}>Total Fees Earned</span>
-          <span className={styles.creatorStatValue}>
-            {formatSol(data.creatorStats.totalFeesEarned)} SOL
-          </span>
-        </div>
-        <div className={styles.creatorStat}>
-          <span className={styles.creatorStatLabel}>Launches</span>
-          <span className={styles.creatorStatValue}>
-            {data.creatorStats.pastLaunches}
-          </span>
-        </div>
-        <div className={styles.creatorStat}>
-          <span className={styles.creatorStatLabel}>Stake Status</span>
-          <span className={styles.creatorStatValue}>
-            {data.creatorStats.stakeStatus}
-          </span>
-        </div>
-      </div>
-
-      {/* ── Band 8: Top Holders ── */}
-      <div className={styles.bandHoldersHeader}>
-        <span className={styles.kicker}>TOP HOLDERS</span>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className={styles.holderTable}>
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Wallet</th>
-              <th>Balance</th>
-              <th>Hold Time</th>
-              <th>% of Supply</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.holders.map((h, i) => (
-              <tr key={h.wallet}>
-                <td>{i + 1}</td>
-                <td>
-                  <Link href={`/profile/${h.wallet}`}>{h.wallet}</Link>
-                </td>
-                <td>{h.balance.toLocaleString()}</td>
-                <td>{h.holdTime}</td>
-                <td>{h.pct}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <TokenDetailClient
+      data={{
+        ...data,
+        mint,
+        formattedPrice: formatSol(data.price),
+        formattedVolume: formatSol(data.stats.volume24h),
+        formattedMarketCap: formatSol(data.stats.marketCap),
+        formattedBatchPrice: formatSol(data.stats.batchPrice),
+        formattedCreatorFees: formatSol(data.creatorStats.totalFeesEarned),
+        shortenedCreator: shortenAddress(data.creatorFull),
+      }}
+    />
   );
 }

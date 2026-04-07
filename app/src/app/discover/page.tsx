@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { AuctionRow } from "@/components/AuctionRow";
 import type { AuctionRowProps } from "@/components/AuctionRow";
 import { TokenRow } from "@/components/TokenRow";
 import type { TokenRowProps } from "@/components/TokenRow";
-import styles from "./page.module.css";
+import { DiscoverClient } from "./DiscoverClient";
 
 const API_BASE = process.env.INDEXER_API_URL ?? "http://localhost:4000";
 
@@ -31,6 +30,118 @@ interface TokenResponse {
   feed_score: number;
 }
 
+/* ── Mock data (shown when indexer is unavailable) ── */
+
+const MOCK_AUCTIONS: AuctionRowProps[] = [
+  {
+    mint: "7nYB1HqKxVPR9ZdKNxjMRQfDf4KHnkVxAdrsVRnJPLRk",
+    ticker: "ORBIT",
+    endTime: Date.now() + 4 * 60 * 1000,
+    participants: 38,
+    solCommitted: 24_500_000_000,
+    minWallets: 50,
+    minSol: 10_000_000_000,
+  },
+  {
+    mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+    ticker: "NOVA",
+    endTime: Date.now() + 2 * 60 * 1000 + 18 * 1000,
+    participants: 47,
+    solCommitted: 31_200_000_000,
+    minWallets: 50,
+    minSol: 10_000_000_000,
+  },
+  {
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    ticker: "ZENITH",
+    endTime: Date.now() + 1 * 60 * 1000 + 42 * 1000,
+    participants: 52,
+    solCommitted: 18_800_000_000,
+    minWallets: 50,
+    minSol: 10_000_000_000,
+  },
+];
+
+const MOCK_TOKENS: TokenRowProps[] = [
+  {
+    mint: "So11111111111111111111111111111111111111112",
+    ticker: "PROVE",
+    name: "Prove Token",
+    holderCount: 1_247,
+    volume24h: 84_200_000_000,
+    avgHoldTime: "4.2d",
+    priceChange: 12.4,
+    badges: ["verified", "diamond_hands"],
+    feedScore: 94,
+  },
+  {
+    mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+    ticker: "ALPHA",
+    name: "Alpha Protocol",
+    holderCount: 834,
+    volume24h: 42_100_000_000,
+    avgHoldTime: "3.1d",
+    priceChange: -2.8,
+    badges: ["verified", "survivor"],
+    feedScore: 78,
+  },
+  {
+    mint: "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+    ticker: "BETA",
+    name: "Beta Finance",
+    holderCount: 621,
+    volume24h: 28_400_000_000,
+    avgHoldTime: "5.8d",
+    priceChange: 8.1,
+    badges: ["diamond_hands"],
+    feedScore: 71,
+  },
+  {
+    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    ticker: "NEXUS",
+    name: "Nexus Network",
+    holderCount: 412,
+    volume24h: 15_600_000_000,
+    avgHoldTime: "2.4d",
+    priceChange: 22.7,
+    badges: ["survivor"],
+    feedScore: 65,
+  },
+  {
+    mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+    ticker: "SIGMA",
+    name: "Sigma DAO",
+    holderCount: 289,
+    volume24h: 9_800_000_000,
+    avgHoldTime: "6.1d",
+    priceChange: -5.3,
+    badges: ["verified"],
+    feedScore: 58,
+  },
+  {
+    mint: "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+    ticker: "DRIFT",
+    name: "Drift Protocol",
+    holderCount: 178,
+    volume24h: 6_200_000_000,
+    avgHoldTime: "1.8d",
+    priceChange: 4.6,
+    badges: [],
+    feedScore: 42,
+  },
+  {
+    mint: "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+    ticker: "VORTEX",
+    name: "Vortex Exchange",
+    holderCount: 156,
+    volume24h: 4_100_000_000,
+    avgHoldTime: "3.3d",
+    priceChange: -1.2,
+    badges: ["survivor"],
+    feedScore: 38,
+  },
+];
+
 /* ── Data fetchers ── */
 
 async function getActiveAuctions(): Promise<AuctionRowProps[]> {
@@ -38,8 +149,9 @@ async function getActiveAuctions(): Promise<AuctionRowProps[]> {
     const res = await fetch(`${API_BASE}/api/auctions/active`, {
       next: { revalidate: 15 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return MOCK_AUCTIONS;
     const data: AuctionResponse[] = await res.json();
+    if (data.length === 0) return MOCK_AUCTIONS;
     return data.map((a) => ({
       mint: a.mint,
       ticker: a.ticker,
@@ -50,7 +162,7 @@ async function getActiveAuctions(): Promise<AuctionRowProps[]> {
       minSol: a.min_sol ?? 10_000_000_000,
     }));
   } catch {
-    return [];
+    return MOCK_AUCTIONS;
   }
 }
 
@@ -59,8 +171,9 @@ async function getFeed(): Promise<TokenRowProps[]> {
     const res = await fetch(`${API_BASE}/api/feed`, {
       next: { revalidate: 30 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return MOCK_TOKENS;
     const data: TokenResponse[] = await res.json();
+    if (data.length === 0) return MOCK_TOKENS;
     return data.map((t) => ({
       mint: t.mint,
       ticker: t.ticker,
@@ -73,27 +186,8 @@ async function getFeed(): Promise<TokenRowProps[]> {
       feedScore: t.feed_score,
     }));
   } catch {
-    return [];
+    return MOCK_TOKENS;
   }
-}
-
-/* ── Skeleton for loading state ── */
-
-function SkeletonRows({ count }: { count: number }) {
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={styles.skeletonRow}>
-          <div className={styles.skeletonTicker} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonStat} />
-          <div className={styles.skeletonBadge} />
-          <div className={styles.skeletonScore} />
-        </div>
-      ))}
-    </>
-  );
 }
 
 /* ── Page ── */
@@ -104,72 +198,5 @@ export default async function DiscoverPage() {
     getFeed(),
   ]);
 
-  return (
-    <div className={styles.page}>
-      {/* Band 1: Page header */}
-      <section className={styles.headerBand}>
-        <p className={styles.kicker}>DISCOVER</p>
-        <h1 className={styles.heading}>tokens that proved themselves.</h1>
-        <p className={styles.subtitle}>
-          Only surviving tokens appear here. No noise.
-        </p>
-      </section>
-
-      {/* Band 2: Auctions section header */}
-      <section className={styles.auctionHeaderBand}>
-        <div className={styles.sectionLeft}>
-          <span className={styles.sectionKicker}>LIVE AUCTIONS</span>
-          <span className={styles.countBadge}>{auctions.length}</span>
-        </div>
-        <div className={styles.liveIndicator}>
-          <span className={styles.greenDot} />
-          <span>gathering now</span>
-        </div>
-      </section>
-
-      {/* Band 3: Active auctions list */}
-      <section className={styles.auctionList}>
-        {auctions.length === 0 ? (
-          <p className={styles.emptyState}>no active auctions right now.</p>
-        ) : (
-          auctions.map((a) => <AuctionRow key={a.mint} {...a} />)
-        )}
-      </section>
-
-      {/* Band 4: Token feed header */}
-      <section className={styles.feedHeaderBand}>
-        <div className={styles.sectionLeft}>
-          <span className={styles.sectionKicker}>TOKEN FEED</span>
-        </div>
-        <div className={styles.sortControls}>
-          <button className={styles.sortBtnActive}>holders</button>
-          <button className={styles.sortBtn}>volume</button>
-          <button className={styles.sortBtn}>hold time</button>
-          <button className={styles.sortBtn}>score</button>
-        </div>
-      </section>
-
-      {/* Band 5: Token feed */}
-      <section className={styles.tokenFeed}>
-        {tokens.length === 0 ? (
-          <p className={styles.emptyState}>
-            no tokens yet. be first to launch.
-          </p>
-        ) : (
-          tokens.map((t) => <TokenRow key={t.mint} {...t} />)
-        )}
-      </section>
-
-      {/* Band 6: How to get listed */}
-      <section className={styles.ctaBand}>
-        <p className={styles.ctaText}>
-          launch through a batch auction. if 50+ wallets join and 10+ SOL is
-          committed, your token goes live.
-        </p>
-        <Link href="/launch" className={styles.ctaLink}>
-          launch a token &rarr;
-        </Link>
-      </section>
-    </div>
-  );
+  return <DiscoverClient auctions={auctions} tokens={tokens} />;
 }
