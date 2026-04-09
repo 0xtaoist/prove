@@ -19,8 +19,6 @@ fi
 BA="${BATCH_AUCTION_PROGRAM_ID:-<run deploy-devnet.sh first>}"
 FR="${FEE_ROUTER_PROGRAM_ID:-<run deploy-devnet.sh first>}"
 SM="${STAKE_MANAGER_PROGRAM_ID:-<run deploy-devnet.sh first>}"
-TR="${TICKER_REGISTRY_PROGRAM_ID:-<run deploy-devnet.sh first>}"
-PA="${PROVE_AMM_PROGRAM_ID:-<run deploy-devnet.sh first>}"
 
 cat <<EOF
 
@@ -49,8 +47,6 @@ INDEXER_PORT=3001
 BATCH_AUCTION_PROGRAM_ID=${BA}
 FEE_ROUTER_PROGRAM_ID=${FR}
 STAKE_MANAGER_PROGRAM_ID=${SM}
-TICKER_REGISTRY_PROGRAM_ID=${TR}
-PROVE_AMM_PROGRAM_ID=${PA}
 
 ---------------------------------------------------------------------
  3. Quest Verifier Service  (services/quest-verifier)
@@ -73,8 +69,6 @@ NEXT_PUBLIC_SOLANA_NETWORK=devnet
 NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID=${BA}
 NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID=${FR}
 NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID=${SM}
-NEXT_PUBLIC_TICKER_REGISTRY_PROGRAM_ID=${TR}
-NEXT_PUBLIC_PROVE_AMM_PROGRAM_ID=${PA}
 
 NEXT_PUBLIC_INDEXER_URL=<Railway indexer service URL, e.g. https://prove-indexer.up.railway.app>
 NEXT_PUBLIC_QUEST_URL=<Railway quest service URL, e.g. https://prove-quest.up.railway.app>

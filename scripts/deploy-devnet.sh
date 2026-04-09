@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-devnet.sh — Build and deploy all 4 PROVE programs to Solana devnet.
+# deploy-devnet.sh — Build and deploy all PROVE programs to Solana devnet.
 # Usage: ./scripts/deploy-devnet.sh
 set -euo pipefail
 
@@ -8,7 +8,7 @@ DEPLOY_DIR="$ROOT/target/deploy"
 ENV_FILE="$ROOT/.env.programs"
 
 # ── Program names (must match Anchor.toml / Cargo package names) ─────────
-PROGRAMS=(batch_auction fee_router stake_manager ticker_registry)
+PROGRAMS=(batch_auction fee_router stake_manager)
 
 # ── Preflight checks ────────────────────────────────────────────────────
 echo "==> Checking required tools..."
@@ -40,7 +40,7 @@ BALANCE=$(solana balance --lamports | awk '{print $1}')
 if [[ "$BALANCE" -lt 5000000000 ]]; then
   echo ""
   echo "WARNING: Deployer balance is low ($(solana balance))."
-  echo "         Request an airdrop: solana airdrop 2"
+  echo "         Request airdrops:  solana airdrop 2  (run a few times)"
 fi
 
 # ── Generate keypairs for each program if missing ────────────────────────
@@ -73,8 +73,17 @@ declare -A PROGRAM_IDS
 for prog in "${PROGRAMS[@]}"; do
   echo ""
   echo "--- Deploying $prog ---"
-  anchor deploy --program-name "$prog" --provider.cluster devnet
-  # Read the program ID from the generated keypair
+  SO_FILE="$DEPLOY_DIR/${prog}.so"
+  SO_SIZE=$(wc -c < "$SO_FILE")
+  # Allocate 20% headroom over current binary for future upgrades.
+  # This saves ~40% rent vs the default 2x allocation.
+  MAX_LEN=$(( SO_SIZE + SO_SIZE / 5 ))
+  echo "    Binary size: ${SO_SIZE} bytes, allocating: ${MAX_LEN} bytes"
+  solana program deploy \
+    "$SO_FILE" \
+    --program-id "$DEPLOY_DIR/${prog}-keypair.json" \
+    --max-len "$MAX_LEN" \
+    --url devnet
   PROGRAM_IDS[$prog]=$(solana address --keypair "$DEPLOY_DIR/${prog}-keypair.json")
   echo "    $prog => ${PROGRAM_IDS[$prog]}"
 done
@@ -97,4 +106,11 @@ done
 
 echo ""
 echo "Program IDs saved to $ENV_FILE"
+echo ""
+echo "Next steps:"
+echo "  1. Run: node scripts/init-programs.ts    (initialize on-chain config)"
+echo "  2. Update Anchor.toml with the program IDs above"
+echo "  3. Update declare_id!() in each program's lib.rs"
+echo "  4. Rebuild + redeploy with the real IDs:  anchor build && ./scripts/deploy-devnet.sh"
+echo ""
 echo "Done."

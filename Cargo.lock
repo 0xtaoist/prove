@@ -445,6 +445,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "stake-manager",
 ]
 
 [[package]]
@@ -2425,14 +2426,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "ticker-registry"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
 ]
 
 [[package]]
