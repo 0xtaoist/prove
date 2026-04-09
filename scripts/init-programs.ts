@@ -58,6 +58,7 @@ async function main() {
 
   const batchAuctionId = new PublicKey(requireEnv("BATCH_AUCTION_PROGRAM_ID"));
   const stakeManagerId = new PublicKey(requireEnv("STAKE_MANAGER_PROGRAM_ID"));
+  const feeRouterId = new PublicKey(requireEnv("FEE_ROUTER_PROGRAM_ID"));
 
   // Connect to devnet
   const rpcUrl = process.env.SOLANA_RPC_URL || clusterApiUrl("devnet");
@@ -127,6 +128,33 @@ async function main() {
     console.log(`  StakeManager vault initialized. tx: ${tx}`);
   } catch (err: any) {
     handleInitError("StakeManager", err);
+  }
+
+  // ── 3. FeeRouter — initialize_vault ─────────────────────────────────
+  try {
+    console.log("Initializing FeeRouter vault...");
+    const feeIdl = loadIdl("fee_router");
+    const feeProgram = new anchor.Program(feeIdl, feeRouterId, provider);
+
+    const [feeVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_vault")],
+      feeRouterId
+    );
+
+    // protocol_treasury defaults to the deployer wallet. Rotate later
+    // via the admin key once a dedicated treasury address is ready.
+    const tx = await feeProgram.methods
+      .initializeVault(payer.publicKey)
+      .accounts({
+        authority: payer.publicKey,
+        feeVault: feeVaultPda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    console.log(`  FeeRouter vault initialized. tx: ${tx}`);
+  } catch (err: any) {
+    handleInitError("FeeRouter", err);
   }
 
   console.log("\nAll program initializations complete.");
