@@ -395,20 +395,6 @@ pub mod stake_manager {
         Ok(())
     }
 
-    /// Backend-only stub for the future quest-weighted survivor pool
-    /// distribution. Currently a no-op that just emits an event.
-    /// Full implementation deferred to PR2 (requires Raydium CPI for the
-    /// auto-LP swap-and-deposit mechanic).
-    pub fn distribute_survivor_pool(ctx: Context<DistributeSurvivorPool>) -> Result<()> {
-        require!(
-            ctx.accounts.crank.key() == ctx.accounts.stake_vault.crank_authority,
-            StakeError::Unauthorized
-        );
-        emit!(SurvivorPoolDistributionRequested {
-            timestamp: Clock::get()?.unix_timestamp,
-        });
-        Ok(())
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -560,18 +546,6 @@ pub struct ForfeitStake<'info> {
     pub stake: Account<'info, Stake>,
 
     /// Backend crank. Must equal stake_vault.crank_authority.
-    pub crank: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct DistributeSurvivorPool<'info> {
-    #[account(
-        mut,
-        seeds = [b"stake_vault"],
-        bump = stake_vault.bump,
-    )]
-    pub stake_vault: Account<'info, StakeVault>,
-
     pub crank: Signer<'info>,
 }
 
@@ -751,11 +725,6 @@ pub struct StakeEmergencyWithdrawn {
 pub struct SurvivorPoolSwept {
     pub destination: Pubkey,
     pub amount: u64,
-}
-
-#[event]
-pub struct SurvivorPoolDistributionRequested {
-    pub timestamp: i64,
 }
 
 // ---------------------------------------------------------------------------

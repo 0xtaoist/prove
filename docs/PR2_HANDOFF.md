@@ -72,7 +72,7 @@ Every program has three roles with two-step (propose → accept) rotation:
 | Role | Purpose | Instructions gated |
 |---|---|---|
 | `authority` | Admin: parameter changes, emergency pause, role rotation | `emergency_pause/unpause`, `update_split`, `propose_*_authority`, `set_recovery_destination` |
-| `crank_authority` | Backend service: lifecycle operations | `set_pool_id`, `forfeit_stake_for_failed_auction`, `distribute_survivor_pool`, `claim_and_split`, `register_pool`, `emergency_drain_pool`, `claim_fees_from_raydium` |
+| `crank_authority` | Backend service: lifecycle operations | `set_pool_id`, `forfeit_stake_for_failed_auction`, `claim_and_split`, `register_pool`, `emergency_drain_pool` |
 | `oracle_authority` | Backend signer: milestone attestations (stake_manager only) | `evaluate_milestone` |
 
 All three default to the deploy key on init. User will rotate them to
@@ -108,7 +108,8 @@ These were discussed and confirmed by the project owner during the PR 1
 session. The next agent should treat these as locked-in decisions.
 
 ### Launch flow
-1. Creator pays 2 SOL to deploy (stake_manager::deposit_stake via CPI)
+1. Creator pays 2 SOL to deploy (stake_manager::deposit_stake, bundled
+   client-side in the same transaction as create_auction)
 2. 5-minute batch auction, uniform price, requires 50 unique wallets + 10 SOL
 3. If auction fails: 2 SOL forfeited to survivor pool, never refunded
 4. If auction succeeds: off-chain crank creates Raydium CLMM pool (1% fee),
@@ -160,25 +161,24 @@ session. The next agent should treat these as locked-in decisions.
 ### Must-do
 
 1. **Raydium CLMM CPI integration** in `fee_router`
-   - `claim_fees_from_raydium`: currently a stub that emits an event.
-     Needs real `invoke_signed` CPI to Raydium CLMM `collect_fees`
-     instruction using the `pool_fee_account` PDA as position-owner signer.
-   - `unwind_liquidity`: currently a stub. Needs real CPI to Raydium
-     `decrease_liquidity`.
-   - Account structures for both are complex (pool state, position,
-     tick arrays, token vaults, etc.). Recommend importing Raydium CLMM
-     crate or manually encoding instruction data via `invoke_signed`.
-   - Files: `programs/fee-router/src/lib.rs`, search for `TODO(PR2)`.
+   - Add new instructions: `claim_fees_from_raydium` and `unwind_liquidity`.
+     These were stripped from PR1 to reduce binary size (they were stubs).
+     PR2 adds them with real `invoke_signed` CPI to Raydium CLMM
+     `collect_fees` and `decrease_liquidity` respectively.
+   - The `pool_fee_account` PDA is the position-owner signer.
+   - Account structures are complex (pool state, position, tick arrays,
+     token vaults, etc.). Recommend importing Raydium CLMM crate or
+     manually encoding instruction data via `invoke_signed`.
 
-2. **Survivor pool auto-LP distribution** in `stake_manager`
-   - `distribute_survivor_pool`: currently an event-only stub.
+2. **Survivor pool distribution** in `stake_manager`
+   - Add a new `distribute_survivor_pool` instruction (stripped from PR1).
    - Needs: quest oracle integration (backend signs the winner mint +
      score), Raydium CPI to swap SOL → tokens, Raydium CPI to
      add liquidity (both sides), route the LP NFT to the fee_router PDA.
-   - Consider moving this entirely off-chain (backend wallet holds
-     forfeit SOL, performs the swap + LP deposit as normal transactions).
-     Simpler and avoids complex Raydium CPI. Risk: hot wallet holds
-     forfeit SOL temporarily. Mitigate by cycling quickly.
+   - Consider moving this entirely off-chain (admin calls
+     `emergency_sweep_survivor_pool` to extract SOL, backend wallet
+     performs the swap + LP deposit as normal transactions).
+     Simpler and avoids complex Raydium CPI.
 
 3. **Indexer updates**
    - Account layouts changed across the board. The indexer (services/indexer)
@@ -193,16 +193,12 @@ session. The next agent should treat these as locked-in decisions.
      (stake_vault, stake, stake_manager_program) in addition to the
      existing accounts.
 
-### Nice-to-have
+### Nice-to-have (items 5-6 already done in PR1)
 
-5. **Deploy script updates** (`scripts/deploy-devnet.sh`)
-   - Add `--max-len` flags to each `solana program deploy` call.
-   - Remove ticker_registry deploy step.
+5. ~~Deploy script updates~~ — DONE. `--max-len` added, ticker_registry removed.
 
-6. **Frontend updates** (`app/`)
-   - Remove any references to TICKER_REGISTRY_PROGRAM_ID.
-   - Update the create-auction flow to pass stake_manager accounts.
-   - Update any fee display logic to use bps/10000 instead of percent/100.
+6. ~~Frontend updates~~ — DONE. Transaction builders updated, dead refs removed,
+   bps constants updated to 10000 scale.
 
 7. **Init script updates** (`scripts/init-programs.ts`)
    - `initialize_config` for batch_auction: new account layout
@@ -242,10 +238,11 @@ session. The next agent should treat these as locked-in decisions.
    purpose. If the backend is down, users need to be able to crank it
    themselves so they can refund failed auctions.
 
-3. **The Raydium CPI stubs are real instructions.** They have correct
-   auth gating, account structures, and PDA signing. They just don't do
-   the actual `invoke_signed` to Raydium yet. Drop in the CPI call, don't
-   redesign the instruction.
+3. **Raydium CPI instructions were stripped to save binary size.** PR2
+   needs to add `claim_fees_from_raydium`, `unwind_liquidity` (fee_router)
+   and `distribute_survivor_pool` (stake_manager) as new instructions via
+   program upgrade. Until then, fees are claimed off-chain by the crank
+   and the survivor pool is accessible via `emergency_sweep_survivor_pool`.
 
 4. **`uniform_price` on Auction is vestigial.** It's computed but never
    used by `claim_tokens` (which does its own math). Could be removed

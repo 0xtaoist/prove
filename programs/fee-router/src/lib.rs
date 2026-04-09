@@ -6,12 +6,14 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 // 1. Raydium CLMM pool created with 1% fee tier.
 // 2. LP position NFT held by FeeRouter `pool_fee_account` PDA.
 // 3. Every swap on Raydium/Jupiter pays 1% — cannot be bypassed.
-// 4. Backend crank periodically calls `claim_fees_from_raydium` and
-//    `claim_and_split` to collect fees and route them 80/20 to creator
-//    and protocol treasury.
+// 4. Backend crank claims fees from Raydium off-chain, deposits into the
+//    pool_fee_account PDA, then calls `claim_and_split` to route 80/20
+//    to creator and protocol treasury.
 // 5. If the protocol needs to migrate, the admin can pause, then
-//    `unwind_liquidity` and `recover_lp_nft` move the LP position out to
-//    a dedicated `recovery_destination` for re-deployment.
+//    `recover_lp_nft` moves the LP position NFT to a dedicated
+//    `recovery_destination` for re-deployment.
+// 6. PR2 will add on-chain Raydium CPI for fee claiming + liquidity
+//    unwinding via program upgrade.
 
 declare_id!("FeeR111111111111111111111111111111111111111");
 
@@ -314,62 +316,8 @@ pub mod fee_router {
     }
 
     // -----------------------------------------------------------------
-    // Raydium-side migration hatch
+    // Migration hatch
     // -----------------------------------------------------------------
-
-    /// Backend-only: claim fees from the underlying Raydium CLMM position
-    /// into the `pool_fee_account` PDA. After this returns, a separate
-    /// `claim_and_split` call distributes the lamports.
-    ///
-    /// NOTE: The actual Raydium CLMM `collect_fees` CPI is wired in PR2.
-    /// This instruction currently establishes the auth gating, account
-    /// structure, and PDA-signer scaffolding. The crank can already call
-    /// it; the body just emits an event until the integration lands.
-    pub fn claim_fees_from_raydium(
-        ctx: Context<ClaimFeesFromRaydium>,
-    ) -> Result<()> {
-        require!(
-            ctx.accounts.crank.key() == ctx.accounts.fee_vault.crank_authority,
-            FeeRouterError::Unauthorized
-        );
-
-        // TODO(PR2): invoke_signed Raydium CLMM `collect_fees` here, with
-        // pool_fee_account PDA seeds as the position-owner signer:
-        //   seeds = [b"pool_fee", pool_fee_account.mint.as_ref(), &[bump]]
-
-        emit!(RaydiumFeesClaimRequested {
-            mint: ctx.accounts.pool_fee_account.mint,
-        });
-        Ok(())
-    }
-
-    /// Admin-only, paused-only: unwind some or all of the LP position back
-    /// into raw token + SOL inside the `pool_fee_account` PDA. Used during
-    /// migration before `recover_lp_nft`.
-    ///
-    /// NOTE: The actual Raydium CLMM `decrease_liquidity` CPI is wired in
-    /// PR2. Same scaffolding rationale as `claim_fees_from_raydium`.
-    pub fn unwind_liquidity(
-        ctx: Context<UnwindLiquidity>,
-        liquidity_amount: u128,
-    ) -> Result<()> {
-        require!(
-            ctx.accounts.fee_vault.emergency_paused,
-            FeeRouterError::NotPaused
-        );
-        require!(
-            ctx.accounts.authority.key() == ctx.accounts.fee_vault.authority,
-            FeeRouterError::Unauthorized
-        );
-
-        // TODO(PR2): invoke_signed Raydium CLMM `decrease_liquidity` here.
-
-        emit!(LiquidityUnwindRequested {
-            mint: ctx.accounts.pool_fee_account.mint,
-            liquidity_amount,
-        });
-        Ok(())
-    }
 
     /// Admin-only, paused-only: transfer the LP position NFT out of the
     /// `pool_fee_account` PDA to the recovery destination's token account.
@@ -619,45 +567,6 @@ pub struct EmergencyDrainPool<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ClaimFeesFromRaydium<'info> {
-    pub crank: Signer<'info>,
-
-    #[account(
-        seeds = [b"fee_vault"],
-        bump = fee_vault.bump,
-    )]
-    pub fee_vault: Account<'info, FeeVault>,
-
-    #[account(
-        mut,
-        seeds = [b"pool_fee", pool_fee_account.mint.as_ref()],
-        bump = pool_fee_account.bump,
-    )]
-    pub pool_fee_account: Account<'info, PoolFeeAccount>,
-    // PR2: Add Raydium CLMM accounts (pool state, position, tick arrays,
-    // token vaults, etc.) and the Raydium program once the CPI is wired.
-}
-
-#[derive(Accounts)]
-pub struct UnwindLiquidity<'info> {
-    pub authority: Signer<'info>,
-
-    #[account(
-        seeds = [b"fee_vault"],
-        bump = fee_vault.bump,
-    )]
-    pub fee_vault: Account<'info, FeeVault>,
-
-    #[account(
-        mut,
-        seeds = [b"pool_fee", pool_fee_account.mint.as_ref()],
-        bump = pool_fee_account.bump,
-    )]
-    pub pool_fee_account: Account<'info, PoolFeeAccount>,
-    // PR2: Add Raydium CLMM accounts for decrease_liquidity.
-}
-
-#[derive(Accounts)]
 pub struct RecoverLpNft<'info> {
     pub authority: Signer<'info>,
 
@@ -800,17 +709,6 @@ pub struct FeesClaimed {
 pub struct PoolDrained {
     pub mint: Pubkey,
     pub amount: u64,
-}
-
-#[event]
-pub struct RaydiumFeesClaimRequested {
-    pub mint: Pubkey,
-}
-
-#[event]
-pub struct LiquidityUnwindRequested {
-    pub mint: Pubkey,
-    pub liquidity_amount: u128,
 }
 
 #[event]
