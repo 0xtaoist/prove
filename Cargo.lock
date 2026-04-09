@@ -445,6 +445,8 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "stake-manager",
+ "ticker-registry",
 ]
 
 [[package]]

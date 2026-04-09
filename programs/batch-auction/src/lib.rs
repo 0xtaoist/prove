@@ -2,6 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 
+use stake_manager::cpi::accounts::DepositStake as StakeDepositAccounts;
+use stake_manager::program::StakeManager;
+use ticker_registry::cpi::accounts::RegisterTicker as TickerRegisterAccounts;
+use ticker_registry::program::TickerRegistry;
+
 declare_id!("BAuc111111111111111111111111111111111111111");
 
 // ---------------------------------------------------------------------------
@@ -11,10 +16,6 @@ declare_id!("BAuc111111111111111111111111111111111111111");
 const DEFAULT_MIN_WALLETS: u16 = 50;
 const DEFAULT_MIN_SOL: u64 = 10_000_000_000; // 10 SOL
 const DEFAULT_AUCTION_DURATION: i64 = 300; // 5 minutes
-const DEFAULT_DEPLOYER_STAKE: u64 = 2_000_000_000; // 2 SOL
-const DEFAULT_HOLDER_MILESTONE: u16 = 100;
-const DEFAULT_MILESTONE_WINDOW: i64 = 259_200; // 72 hours
-
 const MAX_TICKER_LEN: usize = 10;
 
 // ---------------------------------------------------------------------------
@@ -29,38 +30,87 @@ pub mod batch_auction {
     pub fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
         let config = &mut ctx.accounts.config;
         config.authority = ctx.accounts.authority.key();
-        config.protocol_authority = ctx.accounts.authority.key();
+        config.pending_authority = Pubkey::default();
+        config.crank_authority = ctx.accounts.authority.key();
+        config.pending_crank_authority = Pubkey::default();
         config.min_wallets = DEFAULT_MIN_WALLETS;
         config.min_sol = DEFAULT_MIN_SOL;
         config.auction_duration = DEFAULT_AUCTION_DURATION;
-        config.deployer_stake = DEFAULT_DEPLOYER_STAKE;
-        config.holder_milestone = DEFAULT_HOLDER_MILESTONE;
-        config.milestone_window = DEFAULT_MILESTONE_WINDOW;
         config.emergency_paused = false;
+
+        emit!(ConfigInitialized {
+            authority: config.authority,
+            min_wallets: config.min_wallets,
+            min_sol: config.min_sol,
+            auction_duration: config.auction_duration,
+        });
         Ok(())
     }
 
-    /// Admin-only: enter emergency mode. While paused, normal flows continue
-    /// to function but participants can also call `emergency_refund_commitment`
-    /// to recover their committed SOL regardless of auction state, and creators
-    /// can call `emergency_withdraw_creator_stake` to recover their deployer
-    /// stake. Use this if the product is broken and funds need to escape.
-    pub fn emergency_pause(ctx: Context<EmergencyAdmin>) -> Result<()> {
+    // -----------------------------------------------------------------
+    // Authority management
+    // -----------------------------------------------------------------
+
+    pub fn propose_authority(ctx: Context<AdminOnly>, new_authority: Pubkey) -> Result<()> {
+        ctx.accounts.config.pending_authority = new_authority;
+        emit!(AuthorityProposed { role: 0, new_authority });
+        Ok(())
+    }
+
+    pub fn accept_authority(ctx: Context<AcceptRole>) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        require!(
+            config.pending_authority == ctx.accounts.new_signer.key(),
+            BatchAuctionError::Unauthorized
+        );
+        let old = config.authority;
+        config.authority = ctx.accounts.new_signer.key();
+        config.pending_authority = Pubkey::default();
+        emit!(AuthorityRotated { role: 0, old, new: config.authority });
+        Ok(())
+    }
+
+    pub fn propose_crank_authority(
+        ctx: Context<AdminOnly>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        ctx.accounts.config.pending_crank_authority = new_authority;
+        emit!(AuthorityProposed { role: 1, new_authority });
+        Ok(())
+    }
+
+    pub fn accept_crank_authority(ctx: Context<AcceptRole>) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        require!(
+            config.pending_crank_authority == ctx.accounts.new_signer.key(),
+            BatchAuctionError::Unauthorized
+        );
+        let old = config.crank_authority;
+        config.crank_authority = ctx.accounts.new_signer.key();
+        config.pending_crank_authority = Pubkey::default();
+        emit!(AuthorityRotated { role: 1, old, new: config.crank_authority });
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------
+    // Emergency mode
+    // -----------------------------------------------------------------
+
+    pub fn emergency_pause(ctx: Context<AdminOnly>) -> Result<()> {
         ctx.accounts.config.emergency_paused = true;
+        emit!(EmergencyPauseToggled { paused: true });
         Ok(())
     }
 
-    /// Admin-only: exit emergency mode.
-    pub fn emergency_unpause(ctx: Context<EmergencyAdmin>) -> Result<()> {
+    pub fn emergency_unpause(ctx: Context<AdminOnly>) -> Result<()> {
         ctx.accounts.config.emergency_paused = false;
+        emit!(EmergencyPauseToggled { paused: false });
         Ok(())
     }
 
-    /// Participant escape hatch. When the protocol is paused, the participant
-    /// can pull back their committed SOL no matter what state the auction is
-    /// in. The commitment account is closed and rent returned to the
-    /// participant. Tokens that were claimable but not yet claimed are
-    /// forfeited (they remain in the auction vault).
+    /// Participant escape hatch when the protocol is paused. Pulls back
+    /// committed SOL regardless of auction state. Forfeits any unclaimed
+    /// tokens. Closes the commitment PDA.
     pub fn emergency_refund_commitment(ctx: Context<EmergencyRefundCommitment>) -> Result<()> {
         require!(
             ctx.accounts.config.emergency_paused,
@@ -75,58 +125,32 @@ pub mod batch_auction {
         let auction_info = ctx.accounts.auction.to_account_info();
         let participant_info = ctx.accounts.participant.to_account_info();
 
-        **auction_info.try_borrow_mut_lamports()? = auction_info
-            .lamports()
-            .checked_sub(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
-        **participant_info.try_borrow_mut_lamports()? = participant_info
-            .lamports()
-            .checked_add(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
+        transfer_lamports_with_floor(&auction_info, &participant_info, amount, 0)?;
 
         let commitment = &mut ctx.accounts.commitment;
         commitment.tokens_claimed = true;
 
+        emit!(CommitmentEmergencyRefunded {
+            mint: ctx.accounts.auction.mint,
+            participant: participant_info.key(),
+            amount,
+        });
         Ok(())
     }
 
-    /// Creator escape hatch. When the protocol is paused, the creator can
-    /// withdraw their original deployer stake (recorded on the auction PDA at
-    /// creation time) regardless of the auction outcome.
-    pub fn emergency_withdraw_creator_stake(
-        ctx: Context<EmergencyWithdrawCreatorStake>,
-    ) -> Result<()> {
-        require!(
-            ctx.accounts.config.emergency_paused,
-            BatchAuctionError::NotPaused
-        );
-        require!(
-            !ctx.accounts.auction.stake_returned,
-            BatchAuctionError::StakeAlreadyReturned
-        );
+    // -----------------------------------------------------------------
+    // Core lifecycle
+    // -----------------------------------------------------------------
 
-        let amount = ctx.accounts.auction.creator_stake;
-        require!(amount > 0, BatchAuctionError::ZeroAmount);
-
-        let auction_info = ctx.accounts.auction.to_account_info();
-        let creator_info = ctx.accounts.creator.to_account_info();
-
-        **auction_info.try_borrow_mut_lamports()? = auction_info
-            .lamports()
-            .checked_sub(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
-        **creator_info.try_borrow_mut_lamports()? = creator_info
-            .lamports()
-            .checked_add(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
-
-        let auction = &mut ctx.accounts.auction;
-        auction.stake_returned = true;
-
-        Ok(())
-    }
-
-    /// Creator launches a new batch auction for a token.
+    /// Creator launches a new batch auction. This single instruction
+    /// atomically:
+    ///   1. Initialises the auction PDA + token vault.
+    ///   2. CPIs ticker_registry::register_ticker to claim the ticker.
+    ///   3. CPIs stake_manager::deposit_stake to lock the 2 SOL stake.
+    ///   4. Mints `total_supply` into the auction-owned token vault.
+    ///
+    /// If any of those steps fails, the entire transaction reverts. There
+    /// is no half-initialised state.
     pub fn create_auction(
         ctx: Context<CreateAuction>,
         ticker: String,
@@ -138,19 +162,35 @@ pub mod batch_auction {
         let config = &ctx.accounts.config;
         let clock = Clock::get()?;
 
-        // Transfer deployer stake to the auction escrow (PDA).
-        system_program::transfer(
+        // --- CPI: ticker_registry::register_ticker -----------------
+        ticker_registry::cpi::register_ticker(
             CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                system_program::Transfer {
-                    from: ctx.accounts.creator.to_account_info(),
-                    to: ctx.accounts.auction.to_account_info(),
+                ctx.accounts.ticker_registry_program.to_account_info(),
+                TickerRegisterAccounts {
+                    ticker_entry: ctx.accounts.ticker_entry.to_account_info(),
+                    registry_config: ctx.accounts.registry_config.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    registrant: ctx.accounts.creator.to_account_info(),
+                    payer: ctx.accounts.creator.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
                 },
             ),
-            config.deployer_stake,
+            ticker.clone(),
         )?;
 
-        // Mint total supply into the auction token vault.
+        // --- CPI: stake_manager::deposit_stake ---------------------
+        stake_manager::cpi::deposit_stake(CpiContext::new(
+            ctx.accounts.stake_manager_program.to_account_info(),
+            StakeDepositAccounts {
+                stake_vault: ctx.accounts.stake_vault.to_account_info(),
+                stake: ctx.accounts.stake.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+                creator: ctx.accounts.creator.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+            },
+        ))?;
+
+        // --- Mint full supply into auction-owned vault -------------
         token::mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -168,11 +208,11 @@ pub mod batch_auction {
             total_supply,
         )?;
 
-        // Populate auction state.
+        // --- Populate auction state --------------------------------
         let auction = &mut ctx.accounts.auction;
         auction.creator = ctx.accounts.creator.key();
         auction.mint = ctx.accounts.mint.key();
-        auction.ticker = ticker;
+        auction.ticker = ticker.clone();
         auction.start_time = clock.unix_timestamp;
         auction.end_time = clock
             .unix_timestamp
@@ -182,17 +222,29 @@ pub mod batch_auction {
         auction.total_supply = total_supply;
         auction.participant_count = 0;
         auction.state = AuctionState::Gathering;
-        auction.stake_returned = false;
-        auction.creator_stake = config.deployer_stake;
         auction.uniform_price = 0;
+        auction.pool_id = Pubkey::default();
+        auction.pool_created = false;
         auction.bump = ctx.bumps.auction;
 
+        emit!(AuctionCreated {
+            mint: auction.mint,
+            creator: auction.creator,
+            ticker,
+            total_supply,
+            start_time: auction.start_time,
+            end_time: auction.end_time,
+        });
         Ok(())
     }
 
     /// Participant commits SOL during the gathering window.
     pub fn commit_sol(ctx: Context<CommitSol>, amount: u64) -> Result<()> {
         require!(amount > 0, BatchAuctionError::ZeroAmount);
+        require!(
+            !ctx.accounts.config.emergency_paused,
+            BatchAuctionError::Paused
+        );
 
         let auction = &ctx.accounts.auction;
         let clock = Clock::get()?;
@@ -206,7 +258,6 @@ pub mod batch_auction {
             BatchAuctionError::AuctionEnded
         );
 
-        // Transfer SOL from participant to auction PDA escrow.
         system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
@@ -218,7 +269,6 @@ pub mod batch_auction {
             amount,
         )?;
 
-        // Update auction totals.
         let auction = &mut ctx.accounts.auction;
         auction.total_sol = auction
             .total_sol
@@ -229,7 +279,6 @@ pub mod batch_auction {
             .checked_add(1)
             .ok_or(BatchAuctionError::Overflow)?;
 
-        // Initialize commitment PDA.
         let commitment = &mut ctx.accounts.commitment;
         commitment.wallet = ctx.accounts.participant.key();
         commitment.auction = auction.mint;
@@ -237,13 +286,20 @@ pub mod batch_auction {
         commitment.tokens_claimed = false;
         commitment.bump = ctx.bumps.commitment;
 
+        emit!(SolCommitted {
+            mint: auction.mint,
+            participant: commitment.wallet,
+            amount,
+            total_sol: auction.total_sol,
+            participant_count: auction.participant_count,
+        });
         Ok(())
     }
 
-    /// Permissionless crank: finalize auction after end_time.
-    /// On success, the auction transitions to Succeeded state. A separate
-    /// permissionless crank (off-chain) will then create a Raydium CPMM pool
-    /// using the auction's SOL + tokens and call `set_pool_id` to record it.
+    /// Permissionless crank: finalise the auction after end_time. Pure
+    /// on-chain logic — checks `participant_count >= 50 && total_sol >= 10 SOL`.
+    /// Stays permissionless so users can self-serve refunds even if the
+    /// backend crank is down.
     pub fn finalize_auction(ctx: Context<FinalizeAuction>) -> Result<()> {
         let auction = &ctx.accounts.auction;
         let config = &ctx.accounts.config;
@@ -260,32 +316,50 @@ pub mod batch_auction {
 
         let auction = &mut ctx.accounts.auction;
 
-        if auction.participant_count >= config.min_wallets && auction.total_sol >= config.min_sol {
+        if auction.participant_count >= config.min_wallets
+            && auction.total_sol >= config.min_sol
+        {
             auction.state = AuctionState::Succeeded;
             auction.uniform_price = auction
                 .total_sol
                 .checked_div(auction.total_supply)
-                .ok_or(BatchAuctionError::Overflow)?;
+                .unwrap_or(0);
+            emit!(AuctionFinalized {
+                mint: auction.mint,
+                succeeded: true,
+                total_sol: auction.total_sol,
+                participant_count: auction.participant_count,
+            });
         } else {
             auction.state = AuctionState::Failed;
+            emit!(AuctionFinalized {
+                mint: auction.mint,
+                succeeded: false,
+                total_sol: auction.total_sol,
+                participant_count: auction.participant_count,
+            });
         }
 
         Ok(())
     }
 
-    /// Claim tokens after a successful auction.
+    /// Claim tokens after a successful auction. Works in both `Succeeded`
+    /// and `Trading` states so participants can never be locked out by the
+    /// pool-creation crank running first.
+    ///
+    /// On successful claim, the commitment PDA is closed and rent returned
+    /// to the participant.
     pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         let auction = &ctx.accounts.auction;
         let commitment = &ctx.accounts.commitment;
 
         require!(
-            auction.state == AuctionState::Succeeded,
+            auction.state == AuctionState::Succeeded || auction.state == AuctionState::Trading,
             BatchAuctionError::AuctionNotSucceeded
         );
         require!(!commitment.tokens_claimed, BatchAuctionError::AlreadyClaimed);
         require!(auction.total_sol > 0, BatchAuctionError::ZeroAmount);
 
-        // tokens = commitment_sol * total_supply / total_sol
         let tokens_owed = (commitment.sol_amount as u128)
             .checked_mul(auction.total_supply as u128)
             .ok_or(BatchAuctionError::Overflow)?
@@ -293,12 +367,15 @@ pub mod batch_auction {
             .ok_or(BatchAuctionError::Overflow)? as u64;
 
         // Mark claimed BEFORE external CPI to prevent reentrancy.
-        let commitment = &mut ctx.accounts.commitment;
-        commitment.tokens_claimed = true;
-
-        // Transfer tokens from vault to participant.
+        let participant_key = ctx.accounts.participant.key();
         let mint_key = auction.mint;
         let bump = auction.bump;
+        let amount = commitment.sol_amount;
+
+        let commitment_mut = &mut ctx.accounts.commitment;
+        commitment_mut.tokens_claimed = true;
+
+        // Transfer tokens from vault to participant.
         let seeds: &[&[u8]] = &[b"auction", mint_key.as_ref(), &[bump]];
         token::transfer(
             CpiContext::new_with_signer(
@@ -313,10 +390,18 @@ pub mod batch_auction {
             tokens_owed,
         )?;
 
+        emit!(TokensClaimed {
+            mint: mint_key,
+            participant: participant_key,
+            sol_committed: amount,
+            tokens_received: tokens_owed,
+        });
         Ok(())
     }
 
-    /// Refund SOL after a failed auction. Closes the commitment PDA.
+    /// Refund SOL after a failed auction. Closes the commitment PDA and
+    /// returns rent to the participant. Permissionless from the
+    /// participant's side — no backend dependency.
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         let auction = &ctx.accounts.auction;
 
@@ -331,38 +416,79 @@ pub mod batch_auction {
 
         let amount = ctx.accounts.commitment.sol_amount;
 
-        // Transfer SOL back from auction PDA to participant.
         let auction_info = ctx.accounts.auction.to_account_info();
         let participant_info = ctx.accounts.participant.to_account_info();
 
-        **auction_info.try_borrow_mut_lamports()? = auction_info
-            .lamports()
-            .checked_sub(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
-        **participant_info.try_borrow_mut_lamports()? = participant_info
-            .lamports()
-            .checked_add(amount)
-            .ok_or(BatchAuctionError::Overflow)?;
+        transfer_lamports_with_floor(&auction_info, &participant_info, amount, 0)?;
 
-        // Commitment PDA is closed via `close = participant` in the accounts struct.
-        // Mark as claimed to prevent double refund within the same tx.
+        let participant_key = participant_info.key();
+        let mint_key = ctx.accounts.auction.mint;
+
         let commitment = &mut ctx.accounts.commitment;
         commitment.tokens_claimed = true;
 
+        emit!(SolRefunded {
+            mint: mint_key,
+            participant: participant_key,
+            amount,
+        });
         Ok(())
     }
 
-    /// Record the Raydium pool address after it has been created off-chain.
-    /// Can be called once by anyone after the auction has succeeded.
+    /// Backend-only: record the Raydium pool address after the off-chain
+    /// crank creates the pool. Only callable by `crank_authority`.
     pub fn set_pool_id(ctx: Context<SetPoolId>, pool_id: Pubkey) -> Result<()> {
+        require!(
+            ctx.accounts.crank.key() == ctx.accounts.config.crank_authority,
+            BatchAuctionError::Unauthorized
+        );
         let auction = &mut ctx.accounts.auction;
-        require!(auction.state == AuctionState::Succeeded, BatchAuctionError::InvalidState);
+        require!(
+            auction.state == AuctionState::Succeeded,
+            BatchAuctionError::InvalidState
+        );
         require!(!auction.pool_created, BatchAuctionError::PoolAlreadyCreated);
+
         auction.pool_id = pool_id;
         auction.pool_created = true;
         auction.state = AuctionState::Trading;
+
+        emit!(PoolIdSet {
+            mint: auction.mint,
+            pool_id,
+        });
         Ok(())
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: rent-floor-aware lamport transfer.
+// ---------------------------------------------------------------------------
+
+fn transfer_lamports_with_floor<'info>(
+    from: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+    additional_reserved: u64,
+) -> Result<()> {
+    require!(amount > 0, BatchAuctionError::ZeroAmount);
+    let rent = Rent::get()?;
+    let min_balance = rent
+        .minimum_balance(from.data_len())
+        .checked_add(additional_reserved)
+        .ok_or(BatchAuctionError::Overflow)?;
+    let current = from.lamports();
+    let after = current
+        .checked_sub(amount)
+        .ok_or(BatchAuctionError::Overflow)?;
+    require!(after >= min_balance, BatchAuctionError::RentFloorViolated);
+
+    **from.try_borrow_mut_lamports()? = after;
+    **to.try_borrow_mut_lamports()? = to
+        .lamports()
+        .checked_add(amount)
+        .ok_or(BatchAuctionError::Overflow)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -379,31 +505,26 @@ pub enum AuctionState {
 
 #[account]
 pub struct AuctionConfig {
-    /// Protocol admin who created this config.
+    /// Protocol admin (parameter changes, role rotations, emergency).
     pub authority: Pubkey,
-    /// Minimum unique wallets for an auction to succeed.
+    pub pending_authority: Pubkey,
+    /// Backend service authorized to crank lifecycle instructions
+    /// (currently: set_pool_id).
+    pub crank_authority: Pubkey,
+    pub pending_crank_authority: Pubkey,
+    /// Minimum unique commitments for an auction to succeed.
     pub min_wallets: u16,
     /// Minimum total SOL (lamports) for success.
     pub min_sol: u64,
     /// Auction duration in seconds.
     pub auction_duration: i64,
-    /// Required creator stake in lamports.
-    pub deployer_stake: u64,
-    /// Holder milestone count.
-    pub holder_milestone: u16,
-    /// Milestone window in seconds.
-    pub milestone_window: i64,
-    /// Protocol authority pubkey.
-    pub protocol_authority: Pubkey,
-    /// When true, participants and creators can call the emergency withdraw
-    /// instructions to recover their funds. Set by the admin.
+    /// When true, commits are blocked and emergency refunds are unlocked.
     pub emergency_paused: bool,
 }
 
 impl AuctionConfig {
-    // discriminator(8) + pubkey(32) + u16(2) + u64(8) + i64(8) + u64(8)
-    // + u16(2) + i64(8) + pubkey(32) + bool(1)
-    pub const LEN: usize = 8 + 32 + 2 + 8 + 8 + 8 + 2 + 8 + 32 + 1;
+    // discriminator(8) + 4*pubkey(128) + u16(2) + u64(8) + i64(8) + bool(1)
+    pub const LEN: usize = 8 + (4 * 32) + 2 + 8 + 8 + 1;
 }
 
 #[account]
@@ -417,23 +538,20 @@ pub struct Auction {
     pub total_supply: u64,
     pub participant_count: u16,
     pub state: AuctionState,
-    pub stake_returned: bool,
-    /// Amount of deployer stake escrowed in this auction PDA. Snapshot of
-    /// `config.deployer_stake` at create time, used by emergency withdrawal
-    /// so that the creator always pulls back exactly what they put in.
-    pub creator_stake: u64,
     pub uniform_price: u64,
-    pub pool_id: Pubkey,        // Raydium pool address, set after pool creation
-    pub pool_created: bool,     // Whether the Raydium pool has been created
+    /// Raydium pool address, set by `set_pool_id` after the backend crank
+    /// builds the pool off-chain.
+    pub pool_id: Pubkey,
+    pub pool_created: bool,
     pub bump: u8,
 }
 
 impl Auction {
-    // discriminator(8) + pubkey(32) + pubkey(32) + string prefix(4) + max_ticker(10)
-    // + i64(8) + i64(8) + u64(8) + u64(8) + u16(2) + enum(1) + bool(1)
-    // + u64(8) [creator_stake] + u64(8) [uniform_price]
-    // + pubkey(32) [pool_id] + bool(1) [pool_created] + u8(1)
-    pub const LEN: usize = 8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 1 + 8 + 8 + 32 + 1 + 1;
+    // discriminator(8) + creator(32) + mint(32) + string prefix(4) + max_ticker(10)
+    // + start(8) + end(8) + total_sol(8) + total_supply(8) + count(2)
+    // + state(1) + uniform_price(8) + pool_id(32) + pool_created(1) + bump(1)
+    pub const LEN: usize =
+        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 8 + 32 + 1 + 1;
 }
 
 #[account]
@@ -446,7 +564,7 @@ pub struct Commitment {
 }
 
 impl Commitment {
-    // discriminator(8) + pubkey(32) + pubkey(32) + u64(8) + bool(1) + u8(1)
+    // discriminator(8) + 32 + 32 + 8 + 1 + 1
     pub const LEN: usize = 8 + 32 + 32 + 8 + 1 + 1;
 }
 
@@ -472,6 +590,31 @@ pub struct InitializeConfig<'info> {
 }
 
 #[derive(Accounts)]
+pub struct AdminOnly<'info> {
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump,
+        constraint = config.authority == authority.key() @ BatchAuctionError::Unauthorized,
+    )]
+    pub config: Account<'info, AuctionConfig>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptRole<'info> {
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump,
+    )]
+    pub config: Account<'info, AuctionConfig>,
+
+    pub new_signer: Signer<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(ticker: String, total_supply: u64)]
 pub struct CreateAuction<'info> {
     #[account(
@@ -489,7 +632,7 @@ pub struct CreateAuction<'info> {
     )]
     pub config: Account<'info, AuctionConfig>,
 
-    /// The SPL token mint for this auction. The auction PDA must be the mint authority.
+    /// SPL token mint for this auction. Auction PDA must be the mint authority.
     #[account(
         mut,
         constraint = mint.mint_authority.map_or(false, |a| a == auction.key()) @ BatchAuctionError::InvalidMintAuthority,
@@ -497,7 +640,6 @@ pub struct CreateAuction<'info> {
     )]
     pub mint: Account<'info, Mint>,
 
-    /// Token vault owned by the auction PDA to hold minted tokens.
     #[account(
         init,
         payer = creator,
@@ -511,6 +653,24 @@ pub struct CreateAuction<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
+    // ----- ticker_registry CPI accounts -----
+    /// CHECK: Initialized by ticker_registry CPI; PDA seeds checked there.
+    #[account(mut)]
+    pub ticker_entry: UncheckedAccount<'info>,
+    /// CHECK: Validated by ticker_registry CPI.
+    #[account(mut)]
+    pub registry_config: UncheckedAccount<'info>,
+
+    // ----- stake_manager CPI accounts -----
+    /// CHECK: Validated by stake_manager CPI.
+    #[account(mut)]
+    pub stake_vault: UncheckedAccount<'info>,
+    /// CHECK: Initialized by stake_manager CPI; PDA seeds checked there.
+    #[account(mut)]
+    pub stake: UncheckedAccount<'info>,
+
+    pub ticker_registry_program: Program<'info, TickerRegistry>,
+    pub stake_manager_program: Program<'info, StakeManager>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -525,6 +685,12 @@ pub struct CommitSol<'info> {
         bump = auction.bump,
     )]
     pub auction: Account<'info, Auction>,
+
+    #[account(
+        seeds = [b"config"],
+        bump,
+    )]
+    pub config: Account<'info, AuctionConfig>,
 
     #[account(
         init,
@@ -556,7 +722,7 @@ pub struct FinalizeAuction<'info> {
     )]
     pub config: Account<'info, AuctionConfig>,
 
-    /// Anyone can crank finalization.
+    /// Anyone can crank finalization (pure on-chain logic, no off-chain trust).
     pub cranker: Signer<'info>,
 }
 
@@ -573,10 +739,10 @@ pub struct ClaimTokens<'info> {
         seeds = [b"commitment", auction.mint.as_ref(), participant.key().as_ref()],
         bump = commitment.bump,
         constraint = commitment.wallet == participant.key() @ BatchAuctionError::UnauthorizedParticipant,
+        close = participant,
     )]
     pub commitment: Account<'info, Commitment>,
 
-    /// Token vault holding the auction's minted supply.
     #[account(
         mut,
         seeds = [b"vault", auction.mint.as_ref()],
@@ -584,7 +750,6 @@ pub struct ClaimTokens<'info> {
     )]
     pub token_vault: Account<'info, TokenAccount>,
 
-    /// Participant's associated token account to receive claimed tokens.
     #[account(
         mut,
         constraint = participant_token_account.owner == participant.key() @ BatchAuctionError::UnauthorizedParticipant,
@@ -631,21 +796,14 @@ pub struct SetPoolId<'info> {
     )]
     pub auction: Account<'info, Auction>,
 
-    /// Anyone can call this to record the Raydium pool address.
-    pub caller: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct EmergencyAdmin<'info> {
     #[account(
-        mut,
         seeds = [b"config"],
         bump,
-        constraint = config.authority == authority.key() @ BatchAuctionError::Unauthorized,
     )]
     pub config: Account<'info, AuctionConfig>,
 
-    pub authority: Signer<'info>,
+    /// Backend crank authority.
+    pub crank: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -678,24 +836,90 @@ pub struct EmergencyRefundCommitment<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct EmergencyWithdrawCreatorStake<'info> {
-    #[account(
-        seeds = [b"config"],
-        bump,
-    )]
-    pub config: Account<'info, AuctionConfig>,
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
 
-    #[account(
-        mut,
-        seeds = [b"auction", auction.mint.as_ref()],
-        bump = auction.bump,
-        constraint = auction.creator == creator.key() @ BatchAuctionError::Unauthorized,
-    )]
-    pub auction: Account<'info, Auction>,
+#[event]
+pub struct ConfigInitialized {
+    pub authority: Pubkey,
+    pub min_wallets: u16,
+    pub min_sol: u64,
+    pub auction_duration: i64,
+}
 
-    #[account(mut)]
-    pub creator: Signer<'info>,
+#[event]
+pub struct AuthorityProposed {
+    /// 0 = admin, 1 = crank
+    pub role: u8,
+    pub new_authority: Pubkey,
+}
+
+#[event]
+pub struct AuthorityRotated {
+    pub role: u8,
+    pub old: Pubkey,
+    pub new: Pubkey,
+}
+
+#[event]
+pub struct EmergencyPauseToggled {
+    pub paused: bool,
+}
+
+#[event]
+pub struct AuctionCreated {
+    pub mint: Pubkey,
+    pub creator: Pubkey,
+    pub ticker: String,
+    pub total_supply: u64,
+    pub start_time: i64,
+    pub end_time: i64,
+}
+
+#[event]
+pub struct SolCommitted {
+    pub mint: Pubkey,
+    pub participant: Pubkey,
+    pub amount: u64,
+    pub total_sol: u64,
+    pub participant_count: u16,
+}
+
+#[event]
+pub struct AuctionFinalized {
+    pub mint: Pubkey,
+    pub succeeded: bool,
+    pub total_sol: u64,
+    pub participant_count: u16,
+}
+
+#[event]
+pub struct TokensClaimed {
+    pub mint: Pubkey,
+    pub participant: Pubkey,
+    pub sol_committed: u64,
+    pub tokens_received: u64,
+}
+
+#[event]
+pub struct SolRefunded {
+    pub mint: Pubkey,
+    pub participant: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct CommitmentEmergencyRefunded {
+    pub mint: Pubkey,
+    pub participant: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct PoolIdSet {
+    pub mint: Pubkey,
+    pub pool_id: Pubkey,
 }
 
 // ---------------------------------------------------------------------------
@@ -736,10 +960,12 @@ pub enum BatchAuctionError {
     InvalidState,
     #[msg("Raydium pool has already been created for this auction")]
     PoolAlreadyCreated,
-    #[msg("Caller is not the protocol authority")]
+    #[msg("Unauthorized")]
     Unauthorized,
     #[msg("Emergency mode is not active")]
     NotPaused,
-    #[msg("Creator stake has already been returned")]
-    StakeAlreadyReturned,
+    #[msg("Protocol is paused; commits temporarily disabled")]
+    Paused,
+    #[msg("Withdrawal would push the auction PDA below its rent-exempt floor")]
+    RentFloorViolated,
 }
