@@ -9,7 +9,7 @@ IDL_SOURCE="$ROOT/target/idl"
 APP_IDL_DIR="$ROOT/app/src/idl"
 INDEXER_IDL_DIR="$ROOT/services/indexer/src/idl"
 
-PROGRAMS=(batch_auction fee_router stake_manager ticker_registry)
+PROGRAMS=(batch_auction fee_router stake_manager)
 
 # ── Build ────────────────────────────────────────────────────────────────
 echo "==> Building programs with Anchor to generate IDLs..."

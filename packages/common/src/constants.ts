@@ -4,11 +4,11 @@ import { PublicKey } from "@solana/web3.js";
 // - Raydium CLMM pool with 1% fee tier (cannot be bypassed)
 // - LP position owned by FeeRouter PDA
 // - Fees claimed periodically and split:
-//   CREATOR_FEE_BPS (80) = 0.8% of all trading volume to creator
-//   PROTOCOL_FEE_BPS (20) = 0.2% of all trading volume to protocol
-export const CREATOR_FEE_BPS = 80; // 0.8%
-export const PROTOCOL_FEE_BPS = 20; // 0.2%
-export const TOTAL_FEE_BPS = 100; // 1.0%
+//   CREATOR_FEE_BPS (8000) = 80% of pool fees to creator
+//   PROTOCOL_FEE_BPS (2000) = 20% of pool fees to protocol
+export const CREATOR_FEE_BPS = 8000; // 80% (out of 10_000)
+export const PROTOCOL_FEE_BPS = 2000; // 20% (out of 10_000)
+export const TOTAL_FEE_BPS = 10_000;
 
 // Batch auction defaults
 export const MIN_WALLETS = 50;
@@ -20,10 +20,6 @@ export const COOLDOWN_SECS = 30;
 export const DEPLOYER_STAKE_LAMPORTS = 2_000_000_000; // 2 SOL
 export const HOLDER_MILESTONE = 100;
 export const MILESTONE_WINDOW_SECS = 259_200; // 72 hours
-
-// Ticker registry
-export const TICKER_MAX_LENGTH = 10;
-export const TICKER_TTL_SECS = 604_800; // 7 days
 
 // Prove score
 export const PROVE_SCORE_MAX = 100;
@@ -42,7 +38,6 @@ export const PROGRAM_IDS = {
   batchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
   feeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
   stakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
-  tickerRegistry: new PublicKey("Tick111111111111111111111111111111111111111"),
   raydiumClmm: new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), // Raydium CLMM
 } as const;
 

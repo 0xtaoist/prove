@@ -4,13 +4,14 @@
  * Reads program IDs from environment variables or .env.programs, then calls:
  *   - BatchAuction.initialize_config
  *   - StakeManager.initialize_vault
- *   - TickerRegistry.initialize_registry
+ *
+ * Ticker uniqueness is handled off-chain by the backend database.
  *
  * Usage:
  *   npx ts-node scripts/init-programs.ts
  *
  * Environment:
- *   BATCH_AUCTION_PROGRAM_ID, STAKE_MANAGER_PROGRAM_ID, TICKER_REGISTRY_PROGRAM_ID
+ *   BATCH_AUCTION_PROGRAM_ID, STAKE_MANAGER_PROGRAM_ID
  *   (or place them in .env.programs at the repo root)
  */
 
@@ -57,7 +58,6 @@ async function main() {
 
   const batchAuctionId = new PublicKey(requireEnv("BATCH_AUCTION_PROGRAM_ID"));
   const stakeManagerId = new PublicKey(requireEnv("STAKE_MANAGER_PROGRAM_ID"));
-  const tickerRegistryId = new PublicKey(requireEnv("TICKER_REGISTRY_PROGRAM_ID"));
 
   // Connect to devnet
   const rpcUrl = process.env.SOLANA_RPC_URL || clusterApiUrl("devnet");
@@ -127,35 +127,6 @@ async function main() {
     console.log(`  StakeManager vault initialized. tx: ${tx}`);
   } catch (err: any) {
     handleInitError("StakeManager", err);
-  }
-
-  // ── 3. TickerRegistry — initialize_registry ─────────────────────────
-  try {
-    console.log("Initializing TickerRegistry...");
-    const tickerIdl = loadIdl("ticker_registry");
-    const tickerProgram = new anchor.Program(
-      tickerIdl,
-      tickerRegistryId,
-      provider
-    );
-
-    const [registryPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("registry_config")],
-      tickerRegistryId
-    );
-
-    const tx = await tickerProgram.methods
-      .initializeRegistry()
-      .accounts({
-        registryConfig: registryPda,
-        authority: payer.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log(`  TickerRegistry initialized. tx: ${tx}`);
-  } catch (err: any) {
-    handleInitError("TickerRegistry", err);
   }
 
   console.log("\nAll program initializations complete.");
