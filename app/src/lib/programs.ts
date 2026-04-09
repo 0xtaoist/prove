@@ -9,6 +9,16 @@ export const BATCH_AUCTION_PROGRAM_ID = new PublicKey(
     "BAuc111111111111111111111111111111111111111",
 );
 
+export const STAKE_MANAGER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID ??
+    "Stak111111111111111111111111111111111111111",
+);
+
+export const FEE_ROUTER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID ??
+    "FeeR111111111111111111111111111111111111111",
+);
+
 // Raydium CLMM for concentrated liquidity pool creation
 export const RAYDIUM_CLMM_PROGRAM_ID = new PublicKey(
   "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
@@ -71,24 +81,31 @@ export function getCommitmentPDA(
   );
 }
 
+export function getConfigPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    BATCH_AUCTION_PROGRAM_ID,
+  );
+}
+
+export function getVaultPDA(mint: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("vault"), mint.toBuffer()],
+    BATCH_AUCTION_PROGRAM_ID,
+  );
+}
+
 export function getStakePDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("stake"), mint.toBuffer()],
-    BATCH_AUCTION_PROGRAM_ID,
+    STAKE_MANAGER_PROGRAM_ID,
   );
 }
 
-export function getTickerPDA(ticker: string): [PublicKey, number] {
+export function getStakeVaultPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("ticker"), Buffer.from(ticker)],
-    BATCH_AUCTION_PROGRAM_ID,
-  );
-}
-
-export function getFeeConfigPDA(mint: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("fee_config"), mint.toBuffer()],
-    BATCH_AUCTION_PROGRAM_ID,
+    [Buffer.from("stake_vault")],
+    STAKE_MANAGER_PROGRAM_ID,
   );
 }
 
