@@ -91,6 +91,40 @@ pub mod batch_auction {
     }
 
     // -----------------------------------------------------------------
+    // Config updates (upgradability)
+    // -----------------------------------------------------------------
+
+    /// Admin-only: update tunable auction parameters without redeploying.
+    pub fn update_config(
+        ctx: Context<AdminOnly>,
+        new_min_wallets: Option<u16>,
+        new_min_sol: Option<u64>,
+        new_auction_duration: Option<i64>,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+
+        if let Some(mw) = new_min_wallets {
+            require!(mw > 0, BatchAuctionError::InvalidConfigValue);
+            config.min_wallets = mw;
+        }
+        if let Some(ms) = new_min_sol {
+            require!(ms > 0, BatchAuctionError::InvalidConfigValue);
+            config.min_sol = ms;
+        }
+        if let Some(ad) = new_auction_duration {
+            require!(ad > 0, BatchAuctionError::InvalidConfigValue);
+            config.auction_duration = ad;
+        }
+
+        emit!(ConfigUpdated {
+            min_wallets: config.min_wallets,
+            min_sol: config.min_sol,
+            auction_duration: config.auction_duration,
+        });
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------
     // Emergency mode
     // -----------------------------------------------------------------
 
@@ -136,6 +170,41 @@ pub mod batch_auction {
         Ok(())
     }
 
+    /// Admin escape hatch when the protocol is paused. Drains all
+    /// lamports above rent-exempt minimum from a stuck auction PDA
+    /// (e.g. succeeded auction whose pool was never created) to
+    /// a destination wallet chosen by the admin. Only callable by
+    /// the authority while paused.
+    pub fn emergency_drain_auction(ctx: Context<EmergencyDrainAuction>) -> Result<()> {
+        require!(
+            ctx.accounts.config.emergency_paused,
+            BatchAuctionError::NotPaused
+        );
+
+        let auction_info = ctx.accounts.auction.to_account_info();
+        let rent = Rent::get()?;
+        let min_balance = rent.minimum_balance(auction_info.data_len());
+        let current = auction_info.lamports();
+        let drainable = current
+            .checked_sub(min_balance)
+            .ok_or(BatchAuctionError::Overflow)?;
+        require!(drainable > 0, BatchAuctionError::ZeroAmount);
+
+        let dest_info = ctx.accounts.destination.to_account_info();
+        **auction_info.try_borrow_mut_lamports()? = min_balance;
+        **dest_info.try_borrow_mut_lamports()? = dest_info
+            .lamports()
+            .checked_add(drainable)
+            .ok_or(BatchAuctionError::Overflow)?;
+
+        emit!(AuctionDrained {
+            mint: ctx.accounts.auction.mint,
+            amount: drainable,
+            destination: dest_info.key(),
+        });
+        Ok(())
+    }
+
     // -----------------------------------------------------------------
     // Core lifecycle
     // -----------------------------------------------------------------
@@ -160,6 +229,10 @@ pub mod batch_auction {
         require!(total_supply > 0, BatchAuctionError::InvalidSupply);
 
         let config = &ctx.accounts.config;
+        require!(
+            !config.emergency_paused,
+            BatchAuctionError::Paused
+        );
         let clock = Clock::get()?;
 
         // --- CPI: stake_manager::deposit_stake ---------------------
@@ -811,6 +884,29 @@ pub struct EmergencyRefundCommitment<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct EmergencyDrainAuction<'info> {
+    #[account(
+        seeds = [b"config"],
+        bump,
+        constraint = config.authority == authority.key() @ BatchAuctionError::Unauthorized,
+    )]
+    pub config: Account<'info, AuctionConfig>,
+
+    #[account(
+        mut,
+        seeds = [b"auction", auction.mint.as_ref()],
+        bump = auction.bump,
+    )]
+    pub auction: Account<'info, Auction>,
+
+    pub authority: Signer<'info>,
+
+    /// CHECK: Admin-chosen destination for drained lamports.
+    #[account(mut)]
+    pub destination: AccountInfo<'info>,
+}
+
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
@@ -892,6 +988,20 @@ pub struct CommitmentEmergencyRefunded {
 }
 
 #[event]
+pub struct ConfigUpdated {
+    pub min_wallets: u16,
+    pub min_sol: u64,
+    pub auction_duration: i64,
+}
+
+#[event]
+pub struct AuctionDrained {
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub destination: Pubkey,
+}
+
+#[event]
 pub struct PoolIdSet {
     pub mint: Pubkey,
     pub pool_id: Pubkey,
@@ -943,4 +1053,6 @@ pub enum BatchAuctionError {
     Paused,
     #[msg("Withdrawal would push the auction PDA below its rent-exempt floor")]
     RentFloorViolated,
+    #[msg("Config value must be greater than zero")]
+    InvalidConfigValue,
 }

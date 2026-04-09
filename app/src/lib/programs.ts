@@ -9,6 +9,16 @@ export const BATCH_AUCTION_PROGRAM_ID = new PublicKey(
     "BAuc111111111111111111111111111111111111111",
 );
 
+export const STAKE_MANAGER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID ??
+    "Stak111111111111111111111111111111111111111",
+);
+
+export const FEE_ROUTER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID ??
+    "FeeR111111111111111111111111111111111111111",
+);
+
 // Raydium CLMM for concentrated liquidity pool creation
 export const RAYDIUM_CLMM_PROGRAM_ID = new PublicKey(
   "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
@@ -54,9 +64,25 @@ export const RENT_SYSVAR = new PublicKey(
 // PDA derivation helpers
 // ---------------------------------------------------------------------------
 
+// ── BatchAuction PDAs ─────────────────────────────────────────
+
+export function getAuctionConfigPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    BATCH_AUCTION_PROGRAM_ID,
+  );
+}
+
 export function getAuctionPDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("auction"), mint.toBuffer()],
+    BATCH_AUCTION_PROGRAM_ID,
+  );
+}
+
+export function getTokenVaultPDA(mint: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("vault"), mint.toBuffer()],
     BATCH_AUCTION_PROGRAM_ID,
   );
 }
@@ -71,24 +97,35 @@ export function getCommitmentPDA(
   );
 }
 
+// ── StakeManager PDAs ─────────────────────────────────────────
+
+export function getStakeVaultPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("stake_vault")],
+    STAKE_MANAGER_PROGRAM_ID,
+  );
+}
+
 export function getStakePDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("stake"), mint.toBuffer()],
-    BATCH_AUCTION_PROGRAM_ID,
+    STAKE_MANAGER_PROGRAM_ID,
   );
 }
 
-export function getTickerPDA(ticker: string): [PublicKey, number] {
+// ── FeeRouter PDAs ────────────────────────────────────────────
+
+export function getFeeVaultPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("ticker"), Buffer.from(ticker)],
-    BATCH_AUCTION_PROGRAM_ID,
+    [Buffer.from("fee_vault")],
+    FEE_ROUTER_PROGRAM_ID,
   );
 }
 
-export function getFeeConfigPDA(mint: PublicKey): [PublicKey, number] {
+export function getPoolFeePDA(mint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("fee_config"), mint.toBuffer()],
-    BATCH_AUCTION_PROGRAM_ID,
+    [Buffer.from("pool_fee"), mint.toBuffer()],
+    FEE_ROUTER_PROGRAM_ID,
   );
 }
 
@@ -98,7 +135,7 @@ export function getFeeConfigPDA(mint: PublicKey): [PublicKey, number] {
 
 /**
  * Returns a Jupiter aggregator URL for swapping the given token.
- * Jupiter routes through Raydium CPMM pools automatically.
+ * Jupiter routes through Raydium CLMM pools automatically.
  */
 export function getRaydiumSwapUrl(mint: string): string {
   return `https://jup.ag/swap/SOL-${mint}`;

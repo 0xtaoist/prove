@@ -21,9 +21,8 @@ export const DEPLOYER_STAKE_LAMPORTS = 2_000_000_000; // 2 SOL
 export const HOLDER_MILESTONE = 100;
 export const MILESTONE_WINDOW_SECS = 259_200; // 72 hours
 
-// Ticker registry
+// Ticker (validated off-chain by backend DB unique index)
 export const TICKER_MAX_LENGTH = 10;
-export const TICKER_TTL_SECS = 604_800; // 7 days
 
 // Prove score
 export const PROVE_SCORE_MAX = 100;
@@ -42,7 +41,6 @@ export const PROGRAM_IDS = {
   batchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
   feeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
   stakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
-  tickerRegistry: new PublicKey("Tick111111111111111111111111111111111111111"),
   raydiumClmm: new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), // Raydium CLMM
 } as const;
 

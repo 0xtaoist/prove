@@ -2,19 +2,20 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
-  SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
   BATCH_AUCTION_PROGRAM_ID,
+  STAKE_MANAGER_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   SYSTEM_PROGRAM_ID,
   RENT_SYSVAR,
   getAuctionPDA,
+  getAuctionConfigPDA,
+  getTokenVaultPDA,
   getCommitmentPDA,
+  getStakeVaultPDA,
   getStakePDA,
-  getTickerPDA,
-  getFeeConfigPDA,
   getAssociatedTokenAddress,
   getRaydiumSwapUrl,
 } from "./programs";
@@ -51,14 +52,6 @@ function encodeU64(value: number | bigint): Buffer {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: encode a boolean as 1 byte
-// ---------------------------------------------------------------------------
-
-function encodeBool(value: boolean): Buffer {
-  return Buffer.from([value ? 1 : 0]);
-}
-
-// ---------------------------------------------------------------------------
 // Helper: encode a string with a 4-byte LE length prefix (Borsh convention)
 // ---------------------------------------------------------------------------
 
@@ -76,17 +69,18 @@ function encodeString(value: string): Buffer {
 /**
  * Build a transaction that calls `create_auction` on the BatchAuction program.
  *
- * Accounts (expected order):
- *   0. creator          (signer, mut)
- *   1. auction PDA      (mut)
- *   2. ticker PDA       (mut)
- *   3. stake PDA        (mut)
- *   4. mint             (mut)
- *   5. system_program
- *   6. rent
- *
- * The instruction also includes a 2 SOL transfer to the stake PDA, encoded as
- * part of the on-chain logic (the program will CPI into system_program).
+ * On-chain CreateAuction account layout:
+ *   0. auction PDA       (init, mut)  — seeds: ["auction", mint]
+ *   1. config PDA        (readonly)   — seeds: ["config"]
+ *   2. mint              (mut)        — SPL token mint (auction PDA must be mint authority)
+ *   3. token_vault PDA   (init, mut)  — seeds: ["vault", mint]
+ *   4. creator           (signer, mut)
+ *   5. stake_vault       (mut)        — stake_manager PDA
+ *   6. stake PDA         (init, mut)  — stake_manager PDA
+ *   7. stake_manager_program
+ *   8. token_program
+ *   9. system_program
+ *  10. rent
  */
 export async function buildCreateAuctionTx(
   creator: PublicKey,
@@ -95,7 +89,9 @@ export async function buildCreateAuctionTx(
   mint: PublicKey,
 ): Promise<Transaction> {
   const [auctionPDA] = getAuctionPDA(mint);
-  const [tickerPDA] = getTickerPDA(ticker);
+  const [configPDA] = getAuctionConfigPDA();
+  const [tokenVaultPDA] = getTokenVaultPDA(mint);
+  const [stakeVaultPDA] = getStakeVaultPDA();
   const [stakePDA] = getStakePDA(mint);
 
   const discriminator = await anchorDiscriminator("create_auction");
@@ -108,19 +104,22 @@ export async function buildCreateAuctionTx(
   const ix = new TransactionInstruction({
     programId: BATCH_AUCTION_PROGRAM_ID,
     keys: [
-      { pubkey: creator, isSigner: true, isWritable: true },
       { pubkey: auctionPDA, isSigner: false, isWritable: true },
-      { pubkey: tickerPDA, isSigner: false, isWritable: true },
-      { pubkey: stakePDA, isSigner: false, isWritable: true },
+      { pubkey: configPDA, isSigner: false, isWritable: false },
       { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: tokenVaultPDA, isSigner: false, isWritable: true },
+      { pubkey: creator, isSigner: true, isWritable: true },
+      { pubkey: stakeVaultPDA, isSigner: false, isWritable: true },
+      { pubkey: stakePDA, isSigner: false, isWritable: true },
+      { pubkey: STAKE_MANAGER_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: RENT_SYSVAR, isSigner: false, isWritable: false },
     ],
     data,
   });
 
-  const tx = new Transaction().add(ix);
-  return tx;
+  return new Transaction().add(ix);
 }
 
 // ---------------------------------------------------------------------------
@@ -130,11 +129,12 @@ export async function buildCreateAuctionTx(
 /**
  * Build a transaction that calls `commit_sol` on the BatchAuction program.
  *
- * Accounts:
- *   0. participant      (signer, mut)
- *   1. auction PDA      (mut)
- *   2. commitment PDA   (mut)
- *   3. system_program
+ * On-chain CommitSol account layout:
+ *   0. auction PDA      (mut)       — seeds: ["auction", mint]
+ *   1. config PDA       (readonly)  — seeds: ["config"]
+ *   2. commitment PDA   (init, mut) — seeds: ["commitment", mint, participant]
+ *   3. participant      (signer, mut)
+ *   4. system_program
  */
 export async function buildCommitSolTx(
   participant: PublicKey,
@@ -142,6 +142,7 @@ export async function buildCommitSolTx(
   amount: number,
 ): Promise<Transaction> {
   const [auctionPDA] = getAuctionPDA(auctionMint);
+  const [configPDA] = getAuctionConfigPDA();
   const [commitmentPDA] = getCommitmentPDA(auctionMint, participant);
 
   const discriminator = await anchorDiscriminator("commit_sol");
@@ -153,9 +154,10 @@ export async function buildCommitSolTx(
   const ix = new TransactionInstruction({
     programId: BATCH_AUCTION_PROGRAM_ID,
     keys: [
-      { pubkey: participant, isSigner: true, isWritable: true },
       { pubkey: auctionPDA, isSigner: false, isWritable: true },
+      { pubkey: configPDA, isSigner: false, isWritable: false },
       { pubkey: commitmentPDA, isSigner: false, isWritable: true },
+      { pubkey: participant, isSigner: true, isWritable: true },
       { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     data,
@@ -171,15 +173,13 @@ export async function buildCommitSolTx(
 /**
  * Build a transaction that calls `claim_tokens` on the BatchAuction program.
  *
- * Accounts:
- *   0. participant            (signer, mut)
- *   1. auction PDA            (mut)
- *   2. commitment PDA         (mut)
- *   3. mint                   (readonly)
- *   4. participant token ATA  (mut)
- *   5. auction token vault    (mut)  – auction PDA's ATA for the mint
- *   6. token_program
- *   7. system_program
+ * On-chain ClaimTokens account layout:
+ *   0. auction PDA            (readonly) — seeds: ["auction", mint]
+ *   1. commitment PDA         (mut, close=participant)
+ *   2. token_vault PDA        (mut)      — seeds: ["vault", mint]
+ *   3. participant_token_ata  (mut)
+ *   4. participant            (signer, mut)
+ *   5. token_program
  */
 export async function buildClaimTokensTx(
   participant: PublicKey,
@@ -187,22 +187,20 @@ export async function buildClaimTokensTx(
 ): Promise<Transaction> {
   const [auctionPDA] = getAuctionPDA(auctionMint);
   const [commitmentPDA] = getCommitmentPDA(auctionMint, participant);
+  const [tokenVaultPDA] = getTokenVaultPDA(auctionMint);
   const participantAta = getAssociatedTokenAddress(auctionMint, participant);
-  const auctionVault = getAssociatedTokenAddress(auctionMint, auctionPDA);
 
   const discriminator = await anchorDiscriminator("claim_tokens");
 
   const ix = new TransactionInstruction({
     programId: BATCH_AUCTION_PROGRAM_ID,
     keys: [
-      { pubkey: participant, isSigner: true, isWritable: true },
-      { pubkey: auctionPDA, isSigner: false, isWritable: true },
+      { pubkey: auctionPDA, isSigner: false, isWritable: false },
       { pubkey: commitmentPDA, isSigner: false, isWritable: true },
-      { pubkey: auctionMint, isSigner: false, isWritable: false },
+      { pubkey: tokenVaultPDA, isSigner: false, isWritable: true },
       { pubkey: participantAta, isSigner: false, isWritable: true },
-      { pubkey: auctionVault, isSigner: false, isWritable: true },
+      { pubkey: participant, isSigner: true, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     data: discriminator,
   });
@@ -217,10 +215,10 @@ export async function buildClaimTokensTx(
 /**
  * Build a transaction that calls `refund` on the BatchAuction program.
  *
- * Accounts:
- *   0. participant      (signer, mut)
- *   1. auction PDA      (mut)
- *   2. commitment PDA   (mut)
+ * On-chain Refund account layout:
+ *   0. auction PDA      (mut)               — seeds: ["auction", mint]
+ *   1. commitment PDA   (mut, close=participant)
+ *   2. participant      (signer, mut)
  *   3. system_program
  */
 export async function buildRefundTx(
@@ -235,9 +233,9 @@ export async function buildRefundTx(
   const ix = new TransactionInstruction({
     programId: BATCH_AUCTION_PROGRAM_ID,
     keys: [
-      { pubkey: participant, isSigner: true, isWritable: true },
       { pubkey: auctionPDA, isSigner: false, isWritable: true },
       { pubkey: commitmentPDA, isSigner: false, isWritable: true },
+      { pubkey: participant, isSigner: true, isWritable: true },
       { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     data: discriminator,

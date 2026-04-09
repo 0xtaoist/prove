@@ -4,14 +4,15 @@
  * Reads program IDs from environment variables or .env.programs, then calls:
  *   - BatchAuction.initialize_config
  *   - StakeManager.initialize_vault
- *   - TickerRegistry.initialize_registry
+ *   - FeeRouter.initialize_vault
  *
  * Usage:
  *   npx ts-node scripts/init-programs.ts
  *
  * Environment:
- *   BATCH_AUCTION_PROGRAM_ID, STAKE_MANAGER_PROGRAM_ID, TICKER_REGISTRY_PROGRAM_ID
- *   (or place them in .env.programs at the repo root)
+ *   BATCH_AUCTION_PROGRAM_ID, STAKE_MANAGER_PROGRAM_ID, FEE_ROUTER_PROGRAM_ID
+ *   PROTOCOL_TREASURY — Solana address of the protocol treasury wallet
+ *   (or place program IDs in .env.programs at the repo root)
  */
 
 import * as fs from "fs";
@@ -57,7 +58,10 @@ async function main() {
 
   const batchAuctionId = new PublicKey(requireEnv("BATCH_AUCTION_PROGRAM_ID"));
   const stakeManagerId = new PublicKey(requireEnv("STAKE_MANAGER_PROGRAM_ID"));
-  const tickerRegistryId = new PublicKey(requireEnv("TICKER_REGISTRY_PROGRAM_ID"));
+  const feeRouterId = new PublicKey(requireEnv("FEE_ROUTER_PROGRAM_ID"));
+  const protocolTreasury = process.env.PROTOCOL_TREASURY
+    ? new PublicKey(process.env.PROTOCOL_TREASURY)
+    : null;
 
   // Connect to devnet
   const rpcUrl = process.env.SOLANA_RPC_URL || clusterApiUrl("devnet");
@@ -129,33 +133,36 @@ async function main() {
     handleInitError("StakeManager", err);
   }
 
-  // ── 3. TickerRegistry — initialize_registry ─────────────────────────
+  // ── 3. FeeRouter — initialize_vault ─────────────────────────────────
   try {
-    console.log("Initializing TickerRegistry...");
-    const tickerIdl = loadIdl("ticker_registry");
-    const tickerProgram = new anchor.Program(
-      tickerIdl,
-      tickerRegistryId,
-      provider
+    console.log("Initializing FeeRouter vault...");
+    const feeIdl = loadIdl("fee_router");
+    const feeProgram = new anchor.Program(feeIdl, feeRouterId, provider);
+
+    const [vaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_vault")],
+      feeRouterId
     );
 
-    const [registryPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("registry_config")],
-      tickerRegistryId
-    );
+    if (!protocolTreasury) {
+      console.log("  WARNING: PROTOCOL_TREASURY not set. Using deployer as treasury.");
+      console.log("  Set PROTOCOL_TREASURY env var and call update_treasury later.");
+    }
 
-    const tx = await tickerProgram.methods
-      .initializeRegistry()
+    const treasury = protocolTreasury ?? payer.publicKey;
+
+    const tx = await feeProgram.methods
+      .initializeVault(treasury)
       .accounts({
-        registryConfig: registryPda,
+        feeVault: vaultPda,
         authority: payer.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
 
-    console.log(`  TickerRegistry initialized. tx: ${tx}`);
+    console.log(`  FeeRouter vault initialized (treasury=${treasury.toBase58()}). tx: ${tx}`);
   } catch (err: any) {
-    handleInitError("TickerRegistry", err);
+    handleInitError("FeeRouter", err);
   }
 
   console.log("\nAll program initializations complete.");

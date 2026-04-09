@@ -11,6 +11,7 @@ export enum StakeState {
   Escrowed = "escrowed",
   Returned = "returned",
   Forfeited = "forfeited",
+  EmergencyWithdrawn = "emergency_withdrawn",
 }
 
 // Quest types

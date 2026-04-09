@@ -110,6 +110,22 @@ pub mod fee_router {
         Ok(())
     }
 
+    /// Admin-only: update the protocol treasury address. Required when
+    /// rotating the protocol's receiving wallet.
+    pub fn update_treasury(
+        ctx: Context<AdminOnly>,
+        new_treasury: Pubkey,
+    ) -> Result<()> {
+        require!(
+            new_treasury != Pubkey::default(),
+            FeeRouterError::InvalidTreasury
+        );
+        let old = ctx.accounts.fee_vault.protocol_treasury;
+        ctx.accounts.fee_vault.protocol_treasury = new_treasury;
+        emit!(TreasuryUpdated { old, new: new_treasury });
+        Ok(())
+    }
+
     /// Admin-only: update the fee split. Enforces a hard floor on the
     /// creator share to defend against admin-key compromise.
     pub fn update_split(
@@ -770,6 +786,12 @@ pub struct RecoveryDestinationSet {
 }
 
 #[event]
+pub struct TreasuryUpdated {
+    pub old: Pubkey,
+    pub new: Pubkey,
+}
+
+#[event]
 pub struct SplitUpdated {
     pub creator_bps: u16,
     pub protocol_bps: u16,
@@ -854,4 +876,7 @@ pub enum FeeRouterError {
 
     #[msg("Recovery destination token account owner mismatch")]
     RecoveryDestinationMismatch,
+
+    #[msg("Treasury address cannot be the default/zero pubkey")]
+    InvalidTreasury,
 }

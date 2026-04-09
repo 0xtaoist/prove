@@ -36,8 +36,8 @@ describe("BatchAuction", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  // These will be set once programs are deployed and IDLs generated
-  // For now, test structure is documented
+  // These will be set once programs are deployed and IDLs generated.
+  // For now, test structure is documented.
   const admin = Keypair.generate();
   const creator = Keypair.generate();
   const participants = Array.from({ length: 5 }, () => Keypair.generate());
@@ -54,12 +54,12 @@ describe("BatchAuction", () => {
   describe("initialize_config", () => {
     it("creates global auction config", async () => {
       const [configPDA] = findPDA(
-        [Buffer.from("auction_config")],
-        // program.programId - uncomment when IDL available
+        [Buffer.from("config")],
+        // program.programId — uncomment when IDL available
         SystemProgram.programId // placeholder
       );
       // TODO: Call initialize_config with admin signer
-      // Verify: min_wallets=50, min_sol=10 SOL, auction_duration=300, deployer_stake=2 SOL
+      // Verify: min_wallets=50, min_sol=10 SOL, auction_duration=300
       assert.ok(configPDA, "Config PDA derived");
     });
 
@@ -68,22 +68,38 @@ describe("BatchAuction", () => {
     });
   });
 
+  describe("update_config", () => {
+    it("allows admin to update min_wallets, min_sol, auction_duration", async () => {
+      // TODO: Call update_config(new_min_wallets=100, null, null)
+      // Verify: min_wallets updated to 100
+    });
+
+    it("rejects zero values", async () => {
+      // TODO: Call update_config(new_min_wallets=0, null, null), expect InvalidConfigValue
+    });
+
+    it("rejects non-admin caller", async () => {
+      // TODO: Non-admin calls update_config, expect Unauthorized
+    });
+  });
+
   describe("create_auction", () => {
-    it("creates an auction with ticker and 2 SOL stake", async () => {
+    it("creates an auction with ticker and 2 SOL stake via CPI", async () => {
       // TODO:
       // 1. Creator calls create_auction(ticker="TEST", total_supply=1_000_000)
-      // 2. Verify 2 SOL transferred from creator to stake escrow
+      //    with stake_manager CPI accounts (stake_vault, stake, mint)
+      // 2. Verify 2 SOL transferred from creator to stake_vault
       // 3. Verify Auction PDA created with state=Gathering
-      // 4. Verify ticker registered in TickerRegistry
-      // 5. Verify end_time = start_time + 300
+      // 4. Verify end_time = start_time + auction_duration
+      // 5. Verify total_supply minted into token_vault
     });
 
-    it("rejects duplicate ticker", async () => {
-      // TODO: Second create_auction with same ticker should fail
+    it("rejects creation while emergency paused", async () => {
+      // TODO: Pause, then try create_auction, expect Paused error
     });
 
-    it("rejects invalid ticker (lowercase, too long)", async () => {
-      // TODO: Tickers must be uppercase A-Z0-9, max 10 chars
+    it("rejects ticker > 10 chars", async () => {
+      // TODO: create_auction with ticker="TOOLONGNAME1" should fail
     });
   });
 
@@ -94,24 +110,22 @@ describe("BatchAuction", () => {
     });
 
     it("rejects duplicate commitment from same wallet", async () => {
-      // TODO: Same wallet commits again, expect error
+      // TODO: Same wallet commits again, expect PDA init error (already exists)
     });
 
     it("rejects commitment after auction ends", async () => {
-      // TODO: Fast-forward time past end_time, expect error
+      // TODO: Fast-forward time past end_time, expect AuctionEnded error
+    });
+
+    it("rejects commitment while emergency paused", async () => {
+      // TODO: Pause, commit, expect Paused error
     });
   });
 
   describe("finalize_auction - success", () => {
-    it("succeeds when thresholds met", async () => {
+    it("succeeds when thresholds met (permissionless)", async () => {
       // TODO: With 50+ wallets and 10+ SOL committed
       // Verify: state -> Succeeded, uniform_price calculated
-    });
-
-    it("emits event for off-chain Raydium pool creation", async () => {
-      // Pool creation happens off-chain via scripts/create-raydium-pool.ts
-      // After finalization, a permissionless crank creates the Raydium CPMM pool
-      // and calls set_pool_id to record the pool address on-chain.
     });
   });
 
@@ -119,7 +133,11 @@ describe("BatchAuction", () => {
     it("distributes tokens proportionally", async () => {
       // TODO: Each participant claims tokens
       // tokens = commitment_sol * total_supply / total_sol
-      // Verify: tokens transferred, commitment marked claimed
+      // Verify: tokens transferred, commitment closed
+    });
+
+    it("works in both Succeeded and Trading states", async () => {
+      // TODO: Set pool_id (flips to Trading), then claim, should succeed
     });
 
     it("rejects double claim", async () => {
@@ -141,7 +159,22 @@ describe("BatchAuction", () => {
     });
 
     it("rejects refund on successful auction", async () => {
-      // TODO: Try refund on succeeded auction, expect error
+      // TODO: Try refund on succeeded auction, expect AuctionNotFailed error
+    });
+  });
+
+  describe("emergency_drain_auction", () => {
+    it("admin can drain stuck SOL when paused", async () => {
+      // TODO: Pause, call emergency_drain_auction with admin + destination
+      // Verify: SOL drained to destination, auction PDA at rent-exempt minimum
+    });
+
+    it("rejects when not paused", async () => {
+      // TODO: Call without pausing first, expect NotPaused error
+    });
+
+    it("rejects non-admin caller", async () => {
+      // TODO: Non-admin calls, expect Unauthorized error
     });
   });
 });
@@ -152,32 +185,54 @@ describe("FeeRouter", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  describe("initialize_fee_config", () => {
-    it("creates fee config with correct split", async () => {
-      // TODO: Initialize with creator_bps=80, protocol_bps=20
-      // Verify: FeeConfig PDA created with correct values
-    });
-
-    it("rejects invalid bps (not summing to 100)", async () => {
-      // TODO: creator_bps=60, protocol_bps=20 -> should fail
+  describe("initialize_vault", () => {
+    it("creates fee vault with correct 80/20 split", async () => {
+      // TODO: Initialize with protocol_treasury pubkey
+      // Verify: FeeVault PDA created with creator_bps=8000, protocol_bps=2000
     });
   });
 
-  describe("collect_fees", () => {
-    it("splits fees correctly (0.8% creator, 0.2% protocol)", async () => {
-      // TODO: Collect 1 SOL in fees
-      // Verify: 0.8 SOL to creator escrow, 0.2 SOL to protocol treasury
+  describe("update_split", () => {
+    it("allows admin to adjust split within floor", async () => {
+      // TODO: update_split(7000, 3000) should succeed (creator >= 5000)
+    });
+
+    it("rejects creator share below 50% floor", async () => {
+      // TODO: update_split(4999, 5001) should fail with CreatorShareBelowFloor
+    });
+
+    it("rejects splits not summing to 10000", async () => {
+      // TODO: update_split(6000, 3000) should fail with InvalidSplit
     });
   });
 
-  describe("withdraw_creator_fees", () => {
-    it("allows creator to withdraw accumulated fees", async () => {
-      // TODO: Creator withdraws
-      // Verify: SOL transferred to creator wallet, withdrawn counter updated
+  describe("update_treasury", () => {
+    it("allows admin to change protocol treasury", async () => {
+      // TODO: update_treasury(new_pubkey)
+      // Verify: protocol_treasury updated
     });
 
-    it("rejects non-creator withdrawal", async () => {
-      // TODO: Random wallet tries to withdraw, expect Unauthorized
+    it("rejects zero/default pubkey", async () => {
+      // TODO: update_treasury(Pubkey::default()) should fail with InvalidTreasury
+    });
+  });
+
+  describe("claim_and_split", () => {
+    it("splits drainable SOL 80/20 between creator and treasury", async () => {
+      // TODO: Register pool, deposit SOL to pool_fee_account PDA,
+      // call claim_and_split
+      // Verify: 80% to creator, 20% to protocol_treasury
+    });
+  });
+
+  describe("recover_lp_nft", () => {
+    it("transfers LP NFT to recovery destination when paused", async () => {
+      // TODO: Pause, call recover_lp_nft
+      // Verify: NFT transferred to recovery_destination's token account
+    });
+
+    it("rejects when not paused", async () => {
+      // TODO: Call without pausing, expect NotPaused error
     });
   });
 });
@@ -202,21 +257,23 @@ describe("StakeManager", () => {
     });
   });
 
-  describe("evaluate_milestone - returned", () => {
-    it("returns stake when 100+ holders", async () => {
-      // TODO: Fast-forward past deadline, evaluate with holder_count=150
+  describe("evaluate_milestone - oracle signed", () => {
+    it("returns stake when oracle attests milestone_passed=true", async () => {
+      // TODO: Fast-forward past deadline, call with oracle_authority signer
       // Verify: state -> Returned, 2 SOL sent back to creator
+    });
+
+    it("forfeits stake when oracle attests milestone_passed=false", async () => {
+      // TODO: Evaluate with milestone_passed=false
+      // Verify: state -> Forfeited, SOL stays in vault, total_survivor_pool updated
+    });
+
+    it("rejects non-oracle signer", async () => {
+      // TODO: Random signer, expect Unauthorized
     });
 
     it("rejects evaluation before deadline", async () => {
       // TODO: Try to evaluate before deadline, expect DeadlineNotReached
-    });
-  });
-
-  describe("evaluate_milestone - forfeited", () => {
-    it("forfeits stake when < 100 holders", async () => {
-      // TODO: Evaluate with holder_count=30
-      // Verify: state -> Forfeited, SOL stays in vault
     });
 
     it("rejects double evaluation", async () => {
@@ -224,63 +281,32 @@ describe("StakeManager", () => {
     });
   });
 
-  describe("distribute_forfeit_pool", () => {
-    it("distributes forfeited SOL pro-rata to successful tokens", async () => {
-      // TODO: Pass qualifying mints with holder counts
-      // Verify: pro-rata distribution to creators
-    });
-  });
-});
-
-// ─── TickerRegistry Tests ─────────────────────────────────
-
-describe("TickerRegistry", () => {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  describe("initialize_registry", () => {
-    it("creates registry config", async () => {
-      // TODO: Initialize, verify max_ticker_length=10, ttl=7 days
+  describe("forfeit_stake_for_failed_auction", () => {
+    it("crank forfeits stake immediately for failed auctions", async () => {
+      // TODO: Crank calls with crank_authority
+      // Verify: state -> Forfeited, no deadline check
     });
   });
 
-  describe("register_ticker", () => {
-    it("registers a valid uppercase ticker", async () => {
-      // TODO: Register "PROVE", verify TickerEntry PDA
+  describe("emergency_withdraw_stake", () => {
+    it("creator pulls stake when paused", async () => {
+      // TODO: Pause, creator calls emergency_withdraw_stake
+      // Verify: 2 SOL returned, state -> EmergencyWithdrawn, Stake PDA closed
     });
 
-    it("rejects lowercase ticker", async () => {
-      // TODO: Try "prove", expect InvalidTicker
+    it("rejects when not paused", async () => {
+      // TODO: Call without pausing, expect NotPaused
     });
 
-    it("rejects ticker > 10 chars", async () => {
-      // TODO: Try "TOOLONGNAME1", expect InvalidTicker
-    });
-
-    it("rejects duplicate active ticker", async () => {
-      // TODO: Register "PROVE" again, expect TickerAlreadyRegistered
+    it("rejects already-withdrawn stake", async () => {
+      // TODO: Withdraw twice, expect AlreadyWithdrawn
     });
   });
 
-  describe("deactivate_ticker", () => {
-    it("deactivates a ticker", async () => {
-      // TODO: Deactivate "PROVE"
-      // Verify: active=false, deactivated_at set
-    });
-
-    it("rejects deactivation of already-inactive ticker", async () => {
-      // TODO: Deactivate again, expect AlreadyDeactivated
-    });
-  });
-
-  describe("register_ticker_reuse", () => {
-    it("allows re-registration after TTL expires", async () => {
-      // TODO: Fast-forward past 7-day TTL
-      // Register "PROVE" again with new mint, should succeed
-    });
-
-    it("rejects reuse before TTL expires", async () => {
-      // TODO: Try immediately after deactivation, expect TickerTTLNotExpired
+  describe("emergency_sweep_survivor_pool", () => {
+    it("admin sweeps undistributed survivor pool when paused", async () => {
+      // TODO: Pause, sweep to destination
+      // Verify: Lamports moved, total_distributed updated
     });
   });
 });
@@ -293,16 +319,17 @@ describe("Full Lifecycle Integration", () => {
 
   it("complete flow: create -> commit -> finalize -> claim -> pool creation", async () => {
     // TODO: End-to-end test
-    // 1. Admin initializes all configs
+    // 1. Admin initializes all configs (batch_auction, stake_manager, fee_router)
     // 2. Creator creates auction with ticker "LIFECYCLE"
+    //    - Automatically deposits 2 SOL stake via CPI to stake_manager
     // 3. 50+ participants commit SOL
-    // 4. Finalize auction (success)
+    // 4. Finalize auction (success) — permissionless
     // 5. Participants claim tokens
-    // 6. Off-chain crank creates Raydium CPMM pool (via scripts/create-raydium-pool.ts)
-    // 7. Call set_pool_id to record the Raydium pool address on-chain
-    // 8. Verify auction state transitions to Trading
-    // 9. Users trade on Jupiter/Raydium (no on-chain swap through our program)
-    // 10. Evaluate milestone (pass)
-    // 11. Verify stake returned
+    // 6. Off-chain crank creates Raydium CLMM pool (via scripts/create-raydium-pool.ts)
+    // 7. Crank calls set_pool_id to record pool address, state -> Trading
+    // 8. Users trade on Jupiter/Raydium (no on-chain swap through our programs)
+    // 9. Crank calls claim_and_split to distribute fees 80/20
+    // 10. After 72h, oracle evaluates milestone (pass)
+    // 11. Verify stake returned to creator
   });
 });
