@@ -13,6 +13,9 @@ model Auction {
   id               String        @id @default(cuid())
   mint             String        @unique
   ticker           String
+  /// Solana wallet address that created this coin. This is the
+  /// canonical creator-of-record and MUST be populated. It is the
+  /// sole recipient of the 80% creator fee share.
   creator          String
   startTime        DateTime
   endTime          DateTime
@@ -22,12 +25,21 @@ model Auction {
   state            AuctionState  @default(GATHERING)
   uniformPrice     BigInt?
   stakeReturned    Boolean       @default(false)
+  raydiumPoolId    String?
+  /// Share of total_supply distributed to batch buyers (in real bps).
+  /// 6500 = 65%. The rest seeds the Raydium pool. Snapshot at creation
+  /// time so later admin changes don't retroactively affect this auction.
+  buyerBps         Int           @default(6500)
+  /// True once the pool's share of tokens + all committed SOL have been
+  /// released to the crank for Raydium pool creation.
+  poolSeeded       Boolean       @default(false)
   tokenName        String?
   tokenImage       String?
   description      String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
+  creatorRel  Creator      @relation(fields: [creator], references: [wallet])
   commitments Commitment[]
   swaps       Swap[]
   quests      Quest[]
@@ -104,6 +116,7 @@ enum StakeState {
   ESCROWED
   RETURNED
   FORFEITED
+  EMERGENCY_WITHDRAWN
 }
 
 // ─── Ticker Registry ────────────────────────────────────
@@ -196,4 +209,47 @@ model ForfeitPool {
   totalForfeited   BigInt   @default(0)
   lastDistribution DateTime?
   updatedAt        DateTime @updatedAt
+}
+
+// ─── Creators ───────────────────────────────────────────
+//
+// One row per unique creator wallet. Created the first time a wallet
+// launches a coin (upserted from the listener when AuctionCreated lands,
+// or earlier from the launch flow when the user hits POST /api/creators).
+// Every Auction FKs into this table, so the creator address is a hard
+// database invariant — you cannot insert an auction without one.
+
+model Creator {
+  wallet       String   @id
+  /// Privy user id (e.g. did:privy:...) if the user logged in via Privy.
+  /// Nullable because an auction can still be indexed from a pure
+  /// wallet-only user, but we try to set it on launch.
+  privyUserId  String?  @unique
+  email        String?
+  handle       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auctions Auction[]
+
+  @@index([privyUserId])
+}
+
+// ─── Protocol Config (singleton) ────────────────────────
+//
+// Single row (id = 1) that pins the protocol-wide invariants:
+//   - the 80/20 creator/protocol fee split
+//   - the protocol vault address (where taxes go)
+//
+// A CHECK constraint in migration 002 enforces creatorBps = 80 and
+// protocolBps = 20, so the split cannot drift from what the on-chain
+// fee-router enforces. The indexer asserts this row exists and matches
+// at boot — if not, it refuses to start.
+
+model ProtocolConfig {
+  id                   Int      @id @default(1)
+  creatorBps           Int      // MUST be 80
+  protocolBps          Int      // MUST be 20
+  protocolVaultAddress String   // Solana address receiving the 20% tax
+  updatedAt            DateTime @updatedAt
 }
