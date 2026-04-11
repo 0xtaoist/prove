@@ -11,6 +11,7 @@ export enum StakeState {
   Escrowed = "escrowed",
   Returned = "returned",
   Forfeited = "forfeited",
+  EmergencyWithdrawn = "emergency_withdrawn",
 }
 
 // Quest types
@@ -35,6 +36,11 @@ export interface Auction {
   ticker: string;
   uniformPrice: bigint | null;
   poolAddress: string | null; // Raydium pool address, set after pool creation
+  /// Share of total_supply distributed to buyers. Snapshot at auction
+  /// creation (usually 6500 = 65%). The remaining (10000 - buyerBps)
+  /// of supply seeds the Raydium pool alongside all committed SOL.
+  buyerBps: number;
+  poolSeeded: boolean;
 }
 
 export interface Commitment {

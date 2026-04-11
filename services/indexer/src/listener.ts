@@ -1,14 +1,11 @@
 import { Connection, PublicKey, Logs } from "@solana/web3.js";
 import { prisma } from "./db";
 
-// Program IDs
-// Note: ProveAMM has been removed. Swap tracking now comes from Raydium events
-// via the Raydium CPMM program or Jupiter aggregator logs.
+// Program IDs — TickerRegistry removed (archived, off-chain now).
 const PROGRAMS = {
   BatchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
   FeeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
   StakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
-  TickerRegistry: new PublicKey("Tick111111111111111111111111111111111111111"),
 } as const;
 
 // Reconnection config
@@ -47,7 +44,6 @@ function subscribeWithReconnect(name: ProgramName, programId: PublicKey): void {
       const subId = connection.onLogs(
         programId,
         (logs: Logs) => {
-          // Reset delay on successful message
           delay = BASE_DELAY_MS;
           handleLogs(name, logs).catch((err) => {
             console.error(`[listener] Error handling ${name} logs:`, err);
@@ -77,11 +73,9 @@ function subscribeWithReconnect(name: ProgramName, programId: PublicKey): void {
 async function handleLogs(program: ProgramName, logs: Logs): Promise<void> {
   const { signature, err, logs: logMessages } = logs;
 
-  // Skip failed transactions
   if (err) return;
 
   for (const log of logMessages) {
-    // Anchor/native programs emit "Program log: <event>" or "Program data: <base64>"
     if (!log.startsWith("Program log:") && !log.startsWith("Program data:")) continue;
 
     const message = log.replace(/^Program (log|data): /, "");
@@ -95,9 +89,6 @@ async function handleLogs(program: ProgramName, logs: Logs): Promise<void> {
         break;
       case "StakeManager":
         await handleStakeManagerEvent(message, signature);
-        break;
-      case "TickerRegistry":
-        await handleTickerRegistryEvent(message, signature);
         break;
     }
   }
@@ -121,6 +112,7 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
         create: { wallet: data.creator },
         update: {},
       });
+      const buyerBps = data.buyer_bps ? Number(data.buyer_bps) : 6500;
       await prisma.auction.upsert({
         where: { mint: data.mint },
         create: {
@@ -130,24 +122,25 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
           startTime: new Date(Number(data.start_time) * 1000),
           endTime: new Date(Number(data.end_time) * 1000),
           totalSupply: BigInt(data.total_supply),
+          buyerBps,
           tokenName: data.token_name ?? null,
           tokenImage: data.token_image ?? null,
           description: data.description ?? null,
           state: "GATHERING",
         },
-        update: {},
+        update: { buyerBps },
       });
-      console.log(`[listener] Auction created: ${data.mint} (creator=${data.creator})`);
+      console.log(`[listener] Auction created: ${data.mint} (creator=${data.creator}, buyer_bps=${buyerBps})`);
     } else if (log.includes("SolCommitted")) {
       const data = parseEventData(log);
       if (!data) return;
       await prisma.commitment.upsert({
         where: {
-          auctionMint_wallet: { auctionMint: data.mint, wallet: data.wallet },
+          auctionMint_wallet: { auctionMint: data.mint, wallet: data.participant },
         },
         create: {
           auctionMint: data.mint,
-          wallet: data.wallet,
+          wallet: data.participant,
           solAmount: BigInt(data.amount),
         },
         update: {
@@ -161,49 +154,69 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
           participantCount: { increment: 1 },
         },
       });
-      console.log(`[listener] SOL committed: ${data.wallet} -> ${data.mint}`);
+      console.log(`[listener] SOL committed: ${data.participant} -> ${data.mint}`);
     } else if (log.includes("AuctionFinalized")) {
+      // On-chain emits a single AuctionFinalized event with succeeded: bool.
       const data = parseEventData(log);
       if (!data) return;
+      const succeeded = data.succeeded === "true" || data.succeeded === "1";
       await prisma.auction.update({
         where: { mint: data.mint },
         data: {
-          state: "SUCCEEDED",
-          uniformPrice: data.uniform_price ? BigInt(data.uniform_price) : null,
+          state: succeeded ? "SUCCEEDED" : "FAILED",
+          participantCount: Number(data.participant_count),
         },
       });
-      console.log(`[listener] Auction finalized: ${data.mint}`);
-    } else if (log.includes("AuctionFailed")) {
-      const data = parseEventData(log);
-      if (!data) return;
-      await prisma.auction.update({
-        where: { mint: data.mint },
-        data: { state: "FAILED" },
-      });
-      console.log(`[listener] Auction failed: ${data.mint}`);
+      console.log(`[listener] Auction finalized: ${data.mint} (succeeded=${succeeded})`);
     } else if (log.includes("TokensClaimed")) {
       const data = parseEventData(log);
       if (!data) return;
       await prisma.commitment.update({
         where: {
-          auctionMint_wallet: { auctionMint: data.mint, wallet: data.wallet },
+          auctionMint_wallet: { auctionMint: data.mint, wallet: data.participant },
         },
         data: { tokensClaimed: true },
       });
-      // Initialize holder snapshot
       await prisma.holderSnapshot.upsert({
-        where: { mint_wallet: { mint: data.mint, wallet: data.wallet } },
+        where: { mint_wallet: { mint: data.mint, wallet: data.participant } },
         create: {
           mint: data.mint,
-          wallet: data.wallet,
-          balance: BigInt(data.token_amount),
+          wallet: data.participant,
+          balance: BigInt(data.tokens_received),
           firstSeen: new Date(),
         },
         update: {
-          balance: { increment: BigInt(data.token_amount) },
+          balance: { increment: BigInt(data.tokens_received) },
         },
       });
-      console.log(`[listener] Tokens claimed: ${data.wallet} on ${data.mint}`);
+      console.log(`[listener] Tokens claimed: ${data.participant} on ${data.mint}`);
+    } else if (log.includes("PoolSeeded")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      await prisma.auction.update({
+        where: { mint: data.mint },
+        data: { poolSeeded: true },
+      });
+      console.log(
+        `[listener] Pool seeded: ${data.mint} (tokens=${data.pool_tokens}, sol=${data.sol_amount}, buyer_bps=${data.buyer_bps})`,
+      );
+    } else if (log.includes("PoolIdSet")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      await prisma.auction.update({
+        where: { mint: data.mint },
+        data: {
+          state: "TRADING",
+          raydiumPoolId: data.pool_id,
+        },
+      });
+      console.log(`[listener] Pool set: ${data.mint} -> ${data.pool_id}`);
+    } else if (log.includes("CommitmentEmergencyRefunded")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      console.log(
+        `[listener] Emergency refund: ${data.participant} on ${data.mint} (${data.amount} lamports)`,
+      );
     }
   } catch (err) {
     console.error("[listener] BatchAuction event error:", err, { log, signature });
@@ -214,37 +227,42 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
 
 async function handleFeeRouterEvent(log: string, _signature: string): Promise<void> {
   try {
-    if (log.includes("FeesCollected")) {
+    if (log.includes("FeesClaimed")) {
+      // On-chain event: FeesClaimed { mint, total, to_creator, to_protocol }
       const data = parseEventData(log);
       if (!data) return;
+
+      // Look up the creator from the auction row
+      const auction = await prisma.auction.findUnique({
+        where: { mint: data.mint },
+        select: { creator: true },
+      });
+      if (!auction) return;
 
       await prisma.creatorFee.upsert({
         where: {
-          mint_creator: { mint: data.mint, creator: data.creator },
+          mint_creator: { mint: data.mint, creator: auction.creator },
         },
         create: {
           mint: data.mint,
-          creator: data.creator,
-          totalEarned: BigInt(data.amount),
+          creator: auction.creator,
+          totalEarned: BigInt(data.to_creator),
         },
         update: {
-          totalEarned: { increment: BigInt(data.amount) },
+          totalEarned: { increment: BigInt(data.to_creator) },
         },
       });
-      console.log(`[listener] Fees collected: ${data.creator} on ${data.mint}`);
-    } else if (log.includes("FeesWithdrawn")) {
+      console.log(
+        `[listener] Fees claimed: ${data.mint} (creator=${data.to_creator}, protocol=${data.to_protocol})`,
+      );
+    } else if (log.includes("PoolRegistered")) {
       const data = parseEventData(log);
       if (!data) return;
-
-      await prisma.creatorFee.update({
-        where: {
-          mint_creator: { mint: data.mint, creator: data.creator },
-        },
-        data: {
-          totalWithdrawn: { increment: BigInt(data.amount) },
-        },
-      });
-      console.log(`[listener] Fees withdrawn: ${data.creator} on ${data.mint}`);
+      console.log(`[listener] Pool registered: ${data.mint} (raydium=${data.raydium_pool_id})`);
+    } else if (log.includes("EmergencyPauseToggled")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      console.log(`[listener] FeeRouter emergency pause: ${data.paused}`);
     }
   } catch (err) {
     console.error("[listener] FeeRouter event error:", err, { log });
@@ -265,35 +283,59 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
           auctionMint: data.mint,
           creator: data.creator,
           amount: BigInt(data.amount),
-          milestoneDeadline: new Date(Number(data.deadline) * 1000),
+          milestoneDeadline: new Date(Number(data.milestone_deadline) * 1000),
           state: "ESCROWED",
         },
         update: {},
       });
       console.log(`[listener] Stake deposited: ${data.creator} for ${data.mint}`);
-    } else if (log.includes("StakeReturned")) {
+    } else if (log.includes("MilestoneEvaluated")) {
+      // On-chain event: MilestoneEvaluated { mint, creator, passed, amount }
       const data = parseEventData(log);
       if (!data) return;
+      const passed = data.passed === "true" || data.passed === "1";
 
       await prisma.stake.update({
         where: { auctionMint: data.mint },
-        data: { state: "RETURNED", evaluatedAt: new Date() },
+        data: {
+          state: passed ? "RETURNED" : "FORFEITED",
+          evaluatedAt: new Date(),
+        },
       });
-      await prisma.auction.update({
-        where: { mint: data.mint },
-        data: { stakeReturned: true },
-      });
-      console.log(`[listener] Stake returned: ${data.mint}`);
+
+      if (passed) {
+        await prisma.auction.update({
+          where: { mint: data.mint },
+          data: { stakeReturned: true },
+        });
+        console.log(`[listener] Milestone passed — stake returned: ${data.mint}`);
+      } else {
+        const pool = await prisma.forfeitPool.findFirst();
+        if (pool) {
+          await prisma.forfeitPool.update({
+            where: { id: pool.id },
+            data: { totalForfeited: { increment: BigInt(data.amount) } },
+          });
+        } else {
+          await prisma.forfeitPool.create({
+            data: { totalForfeited: BigInt(data.amount) },
+          });
+        }
+        console.log(`[listener] Milestone failed — stake forfeited: ${data.mint}`);
+      }
     } else if (log.includes("StakeForfeited")) {
+      // Emitted by forfeit_stake_for_failed_auction
       const data = parseEventData(log);
       if (!data) return;
 
       await prisma.stake.update({
         where: { auctionMint: data.mint },
-        data: { state: "FORFEITED", evaluatedAt: new Date() },
+        data: {
+          state: "FORFEITED",
+          evaluatedAt: new Date(),
+        },
       });
 
-      // Update forfeit pool
       const pool = await prisma.forfeitPool.findFirst();
       if (pool) {
         await prisma.forfeitPool.update({
@@ -305,70 +347,38 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
           data: { totalForfeited: BigInt(data.amount) },
         });
       }
-      console.log(`[listener] Stake forfeited: ${data.mint}`);
+      console.log(`[listener] Stake forfeited (auction failed): ${data.mint}`);
+    } else if (log.includes("StakeEmergencyWithdrawn")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      await prisma.stake.update({
+        where: { auctionMint: data.mint },
+        data: {
+          state: "EMERGENCY_WITHDRAWN",
+          evaluatedAt: new Date(),
+        },
+      });
+      console.log(`[listener] Stake emergency withdrawn: ${data.mint}`);
     }
   } catch (err) {
     console.error("[listener] StakeManager event error:", err, { log });
   }
 }
 
-// ─── TickerRegistry Events ─────────────────────────────────
-
-async function handleTickerRegistryEvent(log: string, _signature: string): Promise<void> {
-  try {
-    if (log.includes("TickerRegistered")) {
-      const data = parseEventData(log);
-      if (!data) return;
-
-      await prisma.tickerEntry.upsert({
-        where: { ticker: data.ticker },
-        create: {
-          ticker: data.ticker,
-          mint: data.mint,
-          ttlExpiry: new Date(Number(data.ttl_expiry) * 1000),
-          active: true,
-        },
-        update: {
-          mint: data.mint,
-          ttlExpiry: new Date(Number(data.ttl_expiry) * 1000),
-          active: true,
-        },
-      });
-      console.log(`[listener] Ticker registered: ${data.ticker} -> ${data.mint}`);
-    } else if (log.includes("TickerDeactivated")) {
-      const data = parseEventData(log);
-      if (!data) return;
-
-      await prisma.tickerEntry.update({
-        where: { ticker: data.ticker },
-        data: { active: false },
-      });
-      console.log(`[listener] Ticker deactivated: ${data.ticker}`);
-    }
-  } catch (err) {
-    console.error("[listener] TickerRegistry event error:", err, { log });
-  }
-}
-
 // ─── Helpers ───────────────────────────────────────────────
 
 function parseEventData(log: string): Record<string, string> | null {
-  // Attempt to parse structured event data from log
   // Expected formats:
   //   "EventName { key: value, key2: value2 }"
   //   or JSON-style after the event name
   try {
-    // Try JSON parse first (some programs emit JSON)
     const jsonMatch = log.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      // Handle Rust-style struct format: { key: value, key2: value2 }
       const raw = jsonMatch[0];
-      // Convert "key: value" to "key": "value" for JSON parsing
       const jsonStr = raw
         .replace(/(\w+)\s*:/g, '"$1":')
         .replace(/:\s*([^",}\s][^,}]*)/g, (_, val) => {
           const trimmed = val.trim();
-          // Don't double-quote if already quoted or a number
           if (/^".*"$/.test(trimmed) || /^-?\d+(\.\d+)?$/.test(trimmed)) {
             return `: ${trimmed}`;
           }
@@ -378,7 +388,7 @@ function parseEventData(log: string): Record<string, string> | null {
       return JSON.parse(jsonStr);
     }
   } catch {
-    // If structured parsing fails, return null
+    // parse failed
   }
 
   return null;
