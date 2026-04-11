@@ -16,6 +16,18 @@ const DEFAULT_MIN_SOL: u64 = 10_000_000_000; // 10 SOL
 const DEFAULT_AUCTION_DURATION: i64 = 300; // 5 minutes
 const MAX_TICKER_LEN: usize = 10;
 
+/// Basis-point denominator. 10_000 bps = 100%.
+const BPS_DENOMINATOR: u16 = 10_000;
+/// Default buyer share: 65% of total supply goes to batch participants.
+/// The remaining 35% + all committed SOL seeds the Raydium CLMM pool.
+const DEFAULT_BUYER_BPS: u16 = 6_500;
+/// Hard floor: buyers must always receive at least 50% of supply.
+/// Protects against admin-key compromise redirecting supply away from buyers.
+const BUYER_BPS_FLOOR: u16 = 5_000;
+/// Hard ceiling: at least 10% of supply must seed the pool
+/// (otherwise the launch would graduate with no liquidity).
+const BUYER_BPS_CEILING: u16 = 9_000;
+
 // ---------------------------------------------------------------------------
 // Program
 // ---------------------------------------------------------------------------
@@ -34,6 +46,7 @@ pub mod batch_auction {
         config.min_wallets = DEFAULT_MIN_WALLETS;
         config.min_sol = DEFAULT_MIN_SOL;
         config.auction_duration = DEFAULT_AUCTION_DURATION;
+        config.buyer_bps = DEFAULT_BUYER_BPS;
         config.emergency_paused = false;
 
         emit!(ConfigInitialized {
@@ -41,6 +54,7 @@ pub mod batch_auction {
             min_wallets: config.min_wallets,
             min_sol: config.min_sol,
             auction_duration: config.auction_duration,
+            buyer_bps: config.buyer_bps,
         });
         Ok(())
     }
@@ -95,11 +109,14 @@ pub mod batch_auction {
     // -----------------------------------------------------------------
 
     /// Admin-only: update tunable auction parameters without redeploying.
+    /// Only applies to auctions created AFTER this call — existing auctions
+    /// keep the buyer_bps they snapshotted at creation time.
     pub fn update_config(
         ctx: Context<AdminOnly>,
         new_min_wallets: Option<u16>,
         new_min_sol: Option<u64>,
         new_auction_duration: Option<i64>,
+        new_buyer_bps: Option<u16>,
     ) -> Result<()> {
         let config = &mut ctx.accounts.config;
 
@@ -115,11 +132,19 @@ pub mod batch_auction {
             require!(ad > 0, BatchAuctionError::InvalidConfigValue);
             config.auction_duration = ad;
         }
+        if let Some(bb) = new_buyer_bps {
+            require!(
+                bb >= BUYER_BPS_FLOOR && bb <= BUYER_BPS_CEILING,
+                BatchAuctionError::InvalidBuyerBps
+            );
+            config.buyer_bps = bb;
+        }
 
         emit!(ConfigUpdated {
             min_wallets: config.min_wallets,
             min_sol: config.min_sol,
             auction_duration: config.auction_duration,
+            buyer_bps: config.buyer_bps,
         });
         Ok(())
     }
@@ -143,6 +168,9 @@ pub mod batch_auction {
     /// Participant escape hatch when the protocol is paused. Pulls back
     /// committed SOL regardless of auction state. Forfeits any unclaimed
     /// tokens. Closes the commitment PDA.
+    ///
+    /// Decrements `auction.total_sol` so downstream instructions (seed_pool,
+    /// off-chain indexer) see an accurate committed-SOL total after refunds.
     pub fn emergency_refund_commitment(ctx: Context<EmergencyRefundCommitment>) -> Result<()> {
         require!(
             ctx.accounts.config.emergency_paused,
@@ -152,19 +180,36 @@ pub mod batch_auction {
             !ctx.accounts.commitment.tokens_claimed,
             BatchAuctionError::AlreadyClaimed
         );
+        // Block refund if the pool has already been seeded — the committed
+        // SOL is no longer in the auction PDA and belongs to the LP now.
+        // Participants should claim_tokens instead.
+        require!(
+            !ctx.accounts.auction.pool_seeded,
+            BatchAuctionError::PoolAlreadySeeded
+        );
 
         let amount = ctx.accounts.commitment.sol_amount;
         let auction_info = ctx.accounts.auction.to_account_info();
         let participant_info = ctx.accounts.participant.to_account_info();
+        let mint_key = ctx.accounts.auction.mint;
+        let participant_key = participant_info.key();
 
         transfer_lamports_with_floor(&auction_info, &participant_info, amount, 0)?;
 
         let commitment = &mut ctx.accounts.commitment;
         commitment.tokens_claimed = true;
 
+        // Decrement total_sol so the accounting stays consistent for
+        // any later seed_pool / off-chain display.
+        let auction = &mut ctx.accounts.auction;
+        auction.total_sol = auction
+            .total_sol
+            .checked_sub(amount)
+            .ok_or(BatchAuctionError::Overflow)?;
+
         emit!(CommitmentEmergencyRefunded {
-            mint: ctx.accounts.auction.mint,
-            participant: participant_info.key(),
+            mint: mint_key,
+            participant: participant_key,
             amount,
         });
         Ok(())
@@ -265,6 +310,10 @@ pub mod batch_auction {
             total_supply,
         )?;
 
+        // --- Snapshot buyer_bps so later config changes don't affect this auction
+        let snapshot_buyer_bps = config.buyer_bps;
+        let auction_duration = config.auction_duration;
+
         // --- Populate auction state --------------------------------
         let auction = &mut ctx.accounts.auction;
         auction.creator = ctx.accounts.creator.key();
@@ -273,7 +322,7 @@ pub mod batch_auction {
         auction.start_time = clock.unix_timestamp;
         auction.end_time = clock
             .unix_timestamp
-            .checked_add(config.auction_duration)
+            .checked_add(auction_duration)
             .ok_or(BatchAuctionError::Overflow)?;
         auction.total_sol = 0;
         auction.total_supply = total_supply;
@@ -282,6 +331,8 @@ pub mod batch_auction {
         auction.uniform_price = 0;
         auction.pool_id = Pubkey::default();
         auction.pool_created = false;
+        auction.pool_seeded = false;
+        auction.buyer_bps = snapshot_buyer_bps;
         auction.bump = ctx.bumps.auction;
 
         emit!(AuctionCreated {
@@ -291,6 +342,7 @@ pub mod batch_auction {
             total_supply,
             start_time: auction.start_time,
             end_time: auction.end_time,
+            buyer_bps: snapshot_buyer_bps,
         });
         Ok(())
     }
@@ -377,10 +429,19 @@ pub mod batch_auction {
             && auction.total_sol >= config.min_sol
         {
             auction.state = AuctionState::Succeeded;
-            auction.uniform_price = auction
-                .total_sol
-                .checked_div(auction.total_supply)
+            // Uniform price per token paid by batch buyers:
+            //   price = total_sol / buyer_pool_tokens
+            //         = total_sol / (total_supply * buyer_bps / 10_000)
+            //         = total_sol * 10_000 / (total_supply * buyer_bps)
+            let buyer_pool_tokens = (auction.total_supply as u128)
+                .checked_mul(auction.buyer_bps as u128)
+                .and_then(|v| v.checked_div(BPS_DENOMINATOR as u128))
                 .unwrap_or(0);
+            auction.uniform_price = if buyer_pool_tokens > 0 {
+                ((auction.total_sol as u128) / buyer_pool_tokens) as u64
+            } else {
+                0
+            };
             emit!(AuctionFinalized {
                 mint: auction.mint,
                 succeeded: true,
@@ -404,6 +465,10 @@ pub mod batch_auction {
     /// and `Trading` states so participants can never be locked out by the
     /// pool-creation crank running first.
     ///
+    /// Only distributes `buyer_bps` of total supply (default 65%). The
+    /// remaining supply (default 35%) stays in the vault to seed the
+    /// Raydium CLMM pool via `seed_pool`.
+    ///
     /// On successful claim, the commitment PDA is closed and rent returned
     /// to the participant.
     pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
@@ -417,11 +482,23 @@ pub mod batch_auction {
         require!(!commitment.tokens_claimed, BatchAuctionError::AlreadyClaimed);
         require!(auction.total_sol > 0, BatchAuctionError::ZeroAmount);
 
+        // buyer_pool_tokens = total_supply * buyer_bps / 10_000
+        // tokens_owed = commitment.sol_amount * buyer_pool_tokens / total_sol
+        //             = commitment.sol_amount * total_supply * buyer_bps
+        //               / (total_sol * 10_000)
+        let buyer_pool_tokens = (auction.total_supply as u128)
+            .checked_mul(auction.buyer_bps as u128)
+            .ok_or(BatchAuctionError::Overflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(BatchAuctionError::Overflow)?;
+
         let tokens_owed = (commitment.sol_amount as u128)
-            .checked_mul(auction.total_supply as u128)
+            .checked_mul(buyer_pool_tokens)
             .ok_or(BatchAuctionError::Overflow)?
             .checked_div(auction.total_sol as u128)
             .ok_or(BatchAuctionError::Overflow)? as u64;
+
+        require!(tokens_owed > 0, BatchAuctionError::ZeroAmount);
 
         // Mark claimed BEFORE external CPI to prevent reentrancy.
         let participant_key = ctx.accounts.participant.key();
@@ -492,8 +569,116 @@ pub mod batch_auction {
         Ok(())
     }
 
+    /// Backend-only: release the pool's share of tokens (35% of total_supply
+    /// when buyer_bps=6500) and all committed SOL to crank-controlled
+    /// accounts so the crank can build the Raydium CLMM position off-chain.
+    ///
+    /// The crank chooses the destination accounts. Tokens go to a
+    /// crank-owned ATA; SOL goes to a crank-owned wallet. The crank is
+    /// then responsible for creating the Raydium CLMM pool with both
+    /// assets and transferring the resulting position NFT to the
+    /// fee_router `pool_fee_account` PDA.
+    ///
+    /// Can only be called once per auction and only while in `Succeeded`
+    /// state. After this returns, the auction is still in `Succeeded`
+    /// (not `Trading`) — the state flips to `Trading` when `set_pool_id`
+    /// is called with the finished pool address.
+    pub fn seed_pool(ctx: Context<SeedPool>) -> Result<()> {
+        require!(
+            ctx.accounts.crank.key() == ctx.accounts.config.crank_authority,
+            BatchAuctionError::Unauthorized
+        );
+
+        let auction_ref = &ctx.accounts.auction;
+        require!(
+            auction_ref.state == AuctionState::Succeeded,
+            BatchAuctionError::InvalidState
+        );
+        require!(!auction_ref.pool_seeded, BatchAuctionError::PoolAlreadySeeded);
+        require!(auction_ref.total_sol > 0, BatchAuctionError::ZeroAmount);
+
+        // pool_tokens = total_supply * (10_000 - buyer_bps) / 10_000
+        let pool_bps = BPS_DENOMINATOR
+            .checked_sub(auction_ref.buyer_bps)
+            .ok_or(BatchAuctionError::Overflow)?;
+        let pool_tokens = (auction_ref.total_supply as u128)
+            .checked_mul(pool_bps as u128)
+            .ok_or(BatchAuctionError::Overflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(BatchAuctionError::Overflow)? as u64;
+
+        require!(pool_tokens > 0, BatchAuctionError::ZeroAmount);
+
+        let mint_key = auction_ref.mint;
+        let bump = auction_ref.bump;
+        let snapshot_buyer_bps = auction_ref.buyer_bps;
+
+        // Grab account infos up-front so we don't conflict with the
+        // later mutable borrow of auction.
+        let auction_info = ctx.accounts.auction.to_account_info();
+        let token_vault_info = ctx.accounts.token_vault.to_account_info();
+        let crank_token_info = ctx.accounts.crank_token_account.to_account_info();
+        let token_program_info = ctx.accounts.token_program.to_account_info();
+        let dest_info = ctx.accounts.crank_sol_destination.to_account_info();
+        let crank_token_key = ctx.accounts.crank_token_account.key();
+        let dest_key = dest_info.key();
+
+        // Mark seeded BEFORE external CPIs to prevent reentrancy.
+        {
+            let auction = &mut ctx.accounts.auction;
+            auction.pool_seeded = true;
+        }
+
+        // Transfer tokens from vault to crank token account.
+        let seeds: &[&[u8]] = &[b"auction", mint_key.as_ref(), &[bump]];
+        token::transfer(
+            CpiContext::new_with_signer(
+                token_program_info,
+                Transfer {
+                    from: token_vault_info,
+                    to: crank_token_info,
+                    authority: auction_info.clone(),
+                },
+                &[seeds],
+            ),
+            pool_tokens,
+        )?;
+
+        // Transfer all drainable SOL from auction PDA to the crank SOL
+        // destination. We compute drainable from the actual PDA balance
+        // minus rent, NOT from auction.total_sol, because a participant
+        // could have called emergency_refund_commitment while paused,
+        // leaving the PDA balance below auction.total_sol.
+        let rent = Rent::get()?;
+        let min_balance = rent.minimum_balance(auction_info.data_len());
+        let current = auction_info.lamports();
+        let drainable_sol = current
+            .checked_sub(min_balance)
+            .ok_or(BatchAuctionError::Overflow)?;
+        require!(drainable_sol > 0, BatchAuctionError::ZeroAmount);
+
+        **auction_info.try_borrow_mut_lamports()? = min_balance;
+        **dest_info.try_borrow_mut_lamports()? = dest_info
+            .lamports()
+            .checked_add(drainable_sol)
+            .ok_or(BatchAuctionError::Overflow)?;
+
+        emit!(PoolSeeded {
+            mint: mint_key,
+            pool_tokens,
+            sol_amount: drainable_sol,
+            buyer_bps: snapshot_buyer_bps,
+            crank_token_account: crank_token_key,
+            crank_sol_destination: dest_key,
+        });
+        Ok(())
+    }
+
     /// Backend-only: record the Raydium pool address after the off-chain
     /// crank creates the pool. Only callable by `crank_authority`.
+    ///
+    /// Requires that `seed_pool` has been called first (i.e. the crank
+    /// actually has the tokens + SOL needed to build the pool).
     pub fn set_pool_id(ctx: Context<SetPoolId>, pool_id: Pubkey) -> Result<()> {
         require!(
             ctx.accounts.crank.key() == ctx.accounts.config.crank_authority,
@@ -504,6 +689,7 @@ pub mod batch_auction {
             auction.state == AuctionState::Succeeded,
             BatchAuctionError::InvalidState
         );
+        require!(auction.pool_seeded, BatchAuctionError::PoolNotSeeded);
         require!(!auction.pool_created, BatchAuctionError::PoolAlreadyCreated);
 
         auction.pool_id = pool_id;
@@ -566,7 +752,7 @@ pub struct AuctionConfig {
     pub authority: Pubkey,
     pub pending_authority: Pubkey,
     /// Backend service authorized to crank lifecycle instructions
-    /// (currently: set_pool_id).
+    /// (currently: set_pool_id, seed_pool).
     pub crank_authority: Pubkey,
     pub pending_crank_authority: Pubkey,
     /// Minimum unique commitments for an auction to succeed.
@@ -575,13 +761,19 @@ pub struct AuctionConfig {
     pub min_sol: u64,
     /// Auction duration in seconds.
     pub auction_duration: i64,
+    /// Share of total supply distributed to buyers at claim time,
+    /// in real basis points. The remaining supply seeds the Raydium
+    /// CLMM pool. Default 6500 (65%). Each auction snapshots this at
+    /// creation time so later admin changes don't affect live auctions.
+    pub buyer_bps: u16,
     /// When true, commits are blocked and emergency refunds are unlocked.
     pub emergency_paused: bool,
 }
 
 impl AuctionConfig {
-    // discriminator(8) + 4*pubkey(128) + u16(2) + u64(8) + i64(8) + bool(1)
-    pub const LEN: usize = 8 + (4 * 32) + 2 + 8 + 8 + 1;
+    // discriminator(8) + 4*pubkey(128) + min_wallets(2) + min_sol(8)
+    // + auction_duration(8) + buyer_bps(2) + emergency_paused(1)
+    pub const LEN: usize = 8 + (4 * 32) + 2 + 8 + 8 + 2 + 1;
 }
 
 #[account]
@@ -599,16 +791,26 @@ pub struct Auction {
     /// Raydium pool address, set by `set_pool_id` after the backend crank
     /// builds the pool off-chain.
     pub pool_id: Pubkey,
+    /// True once `set_pool_id` has been called.
     pub pool_created: bool,
+    /// True once `seed_pool` has released the pool's tokens + SOL to
+    /// the crank for Raydium pool creation. Must be true before
+    /// `set_pool_id` can be called.
+    pub pool_seeded: bool,
+    /// Snapshot of config.buyer_bps at auction creation. Pinning this
+    /// per-auction means admin changes to the global split don't retroactively
+    /// change what buyers receive from live auctions.
+    pub buyer_bps: u16,
     pub bump: u8,
 }
 
 impl Auction {
     // discriminator(8) + creator(32) + mint(32) + string prefix(4) + max_ticker(10)
     // + start(8) + end(8) + total_sol(8) + total_supply(8) + count(2)
-    // + state(1) + uniform_price(8) + pool_id(32) + pool_created(1) + bump(1)
+    // + state(1) + uniform_price(8) + pool_id(32) + pool_created(1)
+    // + pool_seeded(1) + buyer_bps(2) + bump(1)
     pub const LEN: usize =
-        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 8 + 32 + 1 + 1;
+        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 8 + 32 + 1 + 1 + 2 + 1;
 }
 
 #[account]
@@ -855,6 +1057,49 @@ pub struct SetPoolId<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SeedPool<'info> {
+    #[account(
+        mut,
+        seeds = [b"auction", auction.mint.as_ref()],
+        bump = auction.bump,
+    )]
+    pub auction: Account<'info, Auction>,
+
+    #[account(
+        seeds = [b"config"],
+        bump,
+    )]
+    pub config: Account<'info, AuctionConfig>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", auction.mint.as_ref()],
+        bump,
+    )]
+    pub token_vault: Account<'info, TokenAccount>,
+
+    /// Crank-owned token account that receives the pool's share of tokens.
+    /// Must be for this mint. The crank decides the owner — validated
+    /// at the token program level via standard SPL transfer rules.
+    #[account(
+        mut,
+        constraint = crank_token_account.mint == auction.mint @ BatchAuctionError::InvalidMint,
+    )]
+    pub crank_token_account: Account<'info, TokenAccount>,
+
+    /// Crank-owned SOL destination that receives all committed SOL.
+    /// CHECK: Crank chooses the destination; no data read. Must be writable
+    /// to receive lamports.
+    #[account(mut)]
+    pub crank_sol_destination: AccountInfo<'info>,
+
+    /// Backend crank authority.
+    pub crank: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct EmergencyRefundCommitment<'info> {
     #[account(
         seeds = [b"config"],
@@ -917,6 +1162,7 @@ pub struct ConfigInitialized {
     pub min_wallets: u16,
     pub min_sol: u64,
     pub auction_duration: i64,
+    pub buyer_bps: u16,
 }
 
 #[event]
@@ -946,6 +1192,7 @@ pub struct AuctionCreated {
     pub total_supply: u64,
     pub start_time: i64,
     pub end_time: i64,
+    pub buyer_bps: u16,
 }
 
 #[event]
@@ -992,6 +1239,17 @@ pub struct ConfigUpdated {
     pub min_wallets: u16,
     pub min_sol: u64,
     pub auction_duration: i64,
+    pub buyer_bps: u16,
+}
+
+#[event]
+pub struct PoolSeeded {
+    pub mint: Pubkey,
+    pub pool_tokens: u64,
+    pub sol_amount: u64,
+    pub buyer_bps: u16,
+    pub crank_token_account: Pubkey,
+    pub crank_sol_destination: Pubkey,
 }
 
 #[event]
@@ -1055,4 +1313,10 @@ pub enum BatchAuctionError {
     RentFloorViolated,
     #[msg("Config value must be greater than zero")]
     InvalidConfigValue,
+    #[msg("buyer_bps must be between 5000 and 9000 (50% to 90%)")]
+    InvalidBuyerBps,
+    #[msg("Pool has already been seeded")]
+    PoolAlreadySeeded,
+    #[msg("Pool must be seeded before set_pool_id")]
+    PoolNotSeeded,
 }

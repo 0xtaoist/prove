@@ -130,18 +130,45 @@ describe("BatchAuction", () => {
   });
 
   describe("claim_tokens", () => {
-    it("distributes tokens proportionally", async () => {
+    it("distributes only buyer_bps share of supply", async () => {
       // TODO: Each participant claims tokens
-      // tokens = commitment_sol * total_supply / total_sol
-      // Verify: tokens transferred, commitment closed
+      // buyer_pool = total_supply * buyer_bps / 10000   (65% of supply)
+      // tokens_owed = commitment_sol * buyer_pool / total_sol
+      // Verify: sum of all claims = buyer_pool (not total_supply)
+      // Verify: 35% of supply stays in token_vault for pool seeding
     });
 
     it("works in both Succeeded and Trading states", async () => {
-      // TODO: Set pool_id (flips to Trading), then claim, should succeed
+      // TODO: After seed_pool + set_pool_id (flips to Trading), claim should succeed
     });
 
     it("rejects double claim", async () => {
       // TODO: Claim again, expect AlreadyClaimed error
+    });
+  });
+
+  describe("seed_pool", () => {
+    it("crank withdraws (10000 - buyer_bps) of supply + all SOL", async () => {
+      // TODO:
+      // 1. Finalize auction as Succeeded
+      // 2. Crank calls seed_pool with crank_token_account + crank_sol_destination
+      // 3. Verify: pool_tokens = total_supply * 3500 / 10000 transferred to crank_token_account
+      // 4. Verify: auction PDA lamports drained to rent-exempt minimum
+      // 5. Verify: all committed SOL received by crank_sol_destination
+      // 6. Verify: auction.pool_seeded = true
+    });
+
+    it("rejects seed_pool twice", async () => {
+      // TODO: Call seed_pool again, expect PoolAlreadySeeded
+    });
+
+    it("rejects seed_pool from non-crank", async () => {
+      // TODO: Random signer, expect Unauthorized
+    });
+
+    it("rejects set_pool_id before seed_pool", async () => {
+      // TODO: Call set_pool_id on a Succeeded auction that hasn't been seeded,
+      // expect PoolNotSeeded
     });
   });
 

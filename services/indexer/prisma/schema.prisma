@@ -26,6 +26,13 @@ model Auction {
   uniformPrice     BigInt?
   stakeReturned    Boolean       @default(false)
   raydiumPoolId    String?
+  /// Share of total_supply distributed to batch buyers (in real bps).
+  /// 6500 = 65%. The rest seeds the Raydium pool. Snapshot at creation
+  /// time so later admin changes don't retroactively affect this auction.
+  buyerBps         Int           @default(6500)
+  /// True once the pool's share of tokens + all committed SOL have been
+  /// released to the crank for Raydium pool creation.
+  poolSeeded       Boolean       @default(false)
   tokenName        String?
   tokenImage       String?
   description      String?

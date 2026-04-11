@@ -16,6 +16,16 @@ export const MIN_SOL_LAMPORTS = 10_000_000_000; // 10 SOL
 export const AUCTION_DURATION_SECS = 300; // 5 minutes
 export const COOLDOWN_SECS = 30;
 
+// Token supply split between buyers and the Raydium CLMM pool.
+// buyer_bps (65%) of total_supply goes to batch participants at claim time.
+// The remaining (10000 - buyer_bps) (35%) seeds the pool alongside ALL
+// committed SOL. Each auction snapshots this at creation — admin changes
+// to the default only affect future auctions.
+export const DEFAULT_BUYER_BPS = 6_500; // 65%
+export const BUYER_BPS_FLOOR = 5_000;    // 50% (protocol guardrail)
+export const BUYER_BPS_CEILING = 9_000;  // 90% (protocol guardrail)
+export const BPS_DENOMINATOR = 10_000;
+
 // Deployer stake
 export const DEPLOYER_STAKE_LAMPORTS = 2_000_000_000; // 2 SOL
 export const HOLDER_MILESTONE = 100;

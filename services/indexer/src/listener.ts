@@ -115,6 +115,7 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
         create: { wallet: data.creator },
         update: {},
       });
+      const buyerBps = data.buyer_bps ? Number(data.buyer_bps) : 6500;
       await prisma.auction.upsert({
         where: { mint: data.mint },
         create: {
@@ -124,14 +125,15 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
           startTime: new Date(Number(data.start_time) * 1000),
           endTime: new Date(Number(data.end_time) * 1000),
           totalSupply: BigInt(data.total_supply),
+          buyerBps,
           tokenName: data.token_name ?? null,
           tokenImage: data.token_image ?? null,
           description: data.description ?? null,
           state: "GATHERING",
         },
-        update: {},
+        update: { buyerBps },
       });
-      console.log(`[listener] Auction created: ${data.mint} (creator=${data.creator})`);
+      console.log(`[listener] Auction created: ${data.mint} (creator=${data.creator}, buyer_bps=${buyerBps})`);
     } else if (log.includes("SolCommitted")) {
       const data = parseEventData(log);
       if (!data) return;
@@ -192,6 +194,16 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
         },
       });
       console.log(`[listener] Tokens claimed: ${data.participant} on ${data.mint}`);
+    } else if (log.includes("PoolSeeded")) {
+      const data = parseEventData(log);
+      if (!data) return;
+      await prisma.auction.update({
+        where: { mint: data.mint },
+        data: { poolSeeded: true },
+      });
+      console.log(
+        `[listener] Pool seeded: ${data.mint} (tokens=${data.pool_tokens}, sol=${data.sol_amount}, buyer_bps=${data.buyer_bps})`,
+      );
     } else if (log.includes("PoolIdSet")) {
       const data = parseEventData(log);
       if (!data) return;
