@@ -1,19 +1,47 @@
 import { Connection, PublicKey, Logs } from "@solana/web3.js";
 import { prisma } from "./db";
 
-// Program IDs — TickerRegistry removed (archived, off-chain now).
-const PROGRAMS = {
-  BatchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
-  FeeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
-  StakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
-} as const;
+// Program IDs are sourced from the env so deploys can rotate them
+// without a code change. Missing or invalid vars cause the listener
+// to skip startup — subscribing to placeholder IDs would silently
+// index zero events, which is strictly worse than a loud "off"
+// state. TickerRegistry is off-chain (archived) so it's not listed.
+type ProgramName = "BatchAuction" | "FeeRouter" | "StakeManager";
+
+const PROGRAM_ENV_VARS: Record<ProgramName, string> = {
+  BatchAuction: "BATCH_AUCTION_PROGRAM_ID",
+  FeeRouter: "FEE_ROUTER_PROGRAM_ID",
+  StakeManager: "STAKE_MANAGER_PROGRAM_ID",
+};
+
+function resolveProgramIds():
+  | { ok: true; programs: Record<ProgramName, PublicKey> }
+  | { ok: false; reason: string } {
+  const programs = {} as Record<ProgramName, PublicKey>;
+  for (const [name, envVar] of Object.entries(PROGRAM_ENV_VARS) as [
+    ProgramName,
+    string,
+  ][]) {
+    const raw = process.env[envVar];
+    if (!raw) {
+      return { ok: false, reason: `env var ${envVar} not set` };
+    }
+    try {
+      programs[name] = new PublicKey(raw);
+    } catch {
+      return {
+        ok: false,
+        reason: `env var ${envVar} is not a valid Solana pubkey: ${raw}`,
+      };
+    }
+  }
+  return { ok: true, programs };
+}
 
 // Reconnection config
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 60_000;
 const BACKOFF_FACTOR = 2;
-
-type ProgramName = keyof typeof PROGRAMS;
 
 // Subscription tracking for cleanup
 const subscriptions: number[] = [];
@@ -26,11 +54,22 @@ export function startListener(): void {
     return;
   }
 
+  const resolved = resolveProgramIds();
+  if (!resolved.ok) {
+    console.error(
+      `[listener] Program IDs not configured (${resolved.reason}), skipping listener`,
+    );
+    return;
+  }
+
   connection = new Connection(rpcUrl, "confirmed");
   console.log("[listener] Connecting to Solana RPC...");
 
-  for (const [name, programId] of Object.entries(PROGRAMS)) {
-    subscribeWithReconnect(name as ProgramName, programId);
+  for (const [name, programId] of Object.entries(resolved.programs) as [
+    ProgramName,
+    PublicKey,
+  ][]) {
+    subscribeWithReconnect(name, programId);
   }
 }
 

@@ -244,9 +244,11 @@ session. The next agent should treat these as locked-in decisions.
    program upgrade. Until then, fees are claimed off-chain by the crank
    and the survivor pool is accessible via `emergency_sweep_survivor_pool`.
 
-4. **`uniform_price` on Auction is vestigial.** It's computed but never
-   used by `claim_tokens` (which does its own math). Could be removed
-   to save a few bytes per auction PDA.
+4. **`uniform_price` on Auction is unused on-chain but consumed off-chain.**
+   `claim_tokens` does its own math, so the field isn't read by any
+   instruction. However, `services/quest-verifier/src/verifier.ts`
+   (checkPriceAboveBatch) reads it to score the `price_above_batch`
+   quest, so it cannot be removed without also rewriting that quest.
 
 5. **`commit_sol` blocks during emergency pause.** This was added in PR 1
    so users can't be tricked into depositing into a broken auction.

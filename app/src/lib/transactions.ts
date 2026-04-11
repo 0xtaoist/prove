@@ -2,7 +2,6 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
-  SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
@@ -18,7 +17,6 @@ import {
   getStakePDA,
   getStakeVaultPDA,
   getAssociatedTokenAddress,
-  getRaydiumSwapUrl,
 } from "./programs";
 
 // ---------------------------------------------------------------------------
@@ -241,10 +239,5 @@ export async function buildRefundTx(
   return new Transaction().add(ix);
 }
 
-// ---------------------------------------------------------------------------
-// 5. Swap — now handled via Raydium / Jupiter
-// ---------------------------------------------------------------------------
-// Swaps are no longer built as on-chain transactions through our program.
-// Users trade on Jupiter (jup.ag) or Raydium directly.
-// Use getRaydiumSwapUrl(mint) from programs.ts to get the swap URL.
-export { getRaydiumSwapUrl };
+// Note: there's no on-chain swap instruction. Users trade on Jupiter
+// or Raydium directly; see useSwap.ts for the aggregator URL.

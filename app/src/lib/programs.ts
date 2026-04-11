@@ -110,18 +110,6 @@ export function getStakeVaultPDA(): [PublicKey, number] {
 }
 
 // ---------------------------------------------------------------------------
-// Raydium swap URL helper
-// ---------------------------------------------------------------------------
-
-/**
- * Returns a Jupiter aggregator URL for swapping the given token.
- * Jupiter routes through Raydium CPMM pools automatically.
- */
-export function getRaydiumSwapUrl(mint: string): string {
-  return `https://jup.ag/swap/SOL-${mint}`;
-}
-
-// ---------------------------------------------------------------------------
 // Associated token address helper
 // ---------------------------------------------------------------------------
 

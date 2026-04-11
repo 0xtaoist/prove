@@ -11,7 +11,17 @@
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 
 const RAYDIUM_CLMM_PROGRAM = new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-const FEE_ROUTER_PROGRAM = new PublicKey("FeeR111111111111111111111111111111111111111");
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`ERROR: Missing environment variable ${name}`);
+    process.exit(1);
+  }
+  return value;
+}
+
+const FEE_ROUTER_PROGRAM = new PublicKey(requireEnv("FEE_ROUTER_PROGRAM_ID"));
 
 async function createRaydiumPool(auctionMint: string) {
   console.log("Creating Raydium CLMM pool for auction:", auctionMint);

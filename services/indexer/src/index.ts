@@ -4,6 +4,7 @@ import apiRouter from "./api";
 import { startListener, stopListener } from "./listener";
 import { startScoreCalculator } from "./score";
 import { startFeeCollector } from "./fee-collector";
+import { startSwapIndexer, stopSwapIndexer } from "./swap-indexer";
 import { prisma } from "./db";
 import { assertProtocolConfig } from "./protocol-config";
 
@@ -53,10 +54,14 @@ const server = app.listen(PORT, async () => {
 
   // Start fee collection crank (every 15 minutes)
   feeTimer = startFeeCollector();
+
+  // Start swap indexer (polls Raydium/Jupiter every 30s)
+  swapTimer = startSwapIndexer();
 });
 
 let scoreTimer: NodeJS.Timeout | undefined;
 let feeTimer: NodeJS.Timeout | undefined;
+let swapTimer: NodeJS.Timeout | undefined;
 
 // ─── Graceful shutdown (Railway sends SIGTERM on deploy) ────
 async function shutdown(signal: string): Promise<void> {
@@ -70,6 +75,8 @@ async function shutdown(signal: string): Promise<void> {
   // Stop background tasks
   if (scoreTimer) clearInterval(scoreTimer);
   if (feeTimer) clearInterval(feeTimer);
+  if (swapTimer) clearInterval(swapTimer);
+  stopSwapIndexer();
   stopListener();
 
   // Close database connection
