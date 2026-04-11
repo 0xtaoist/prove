@@ -1,0 +1,26 @@
+{
+  "name": "@prove/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "create-pool": "tsx create-raydium-pool.ts",
+    "init-programs": "tsx init-programs.ts",
+    "db-seed": "tsx db-seed.ts"
+  },
+  "dependencies": {
+    "@prove/indexer": "workspace:*",
+    "@coral-xyz/anchor": "^0.30.0",
+    "@prisma/client": "^6.0.0",
+    "@raydium-io/raydium-sdk-v2": "^0.2.39-alpha",
+    "@solana/web3.js": "^1.95.0",
+    "bn.js": "^5.2.1",
+    "decimal.js": "^10.4.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

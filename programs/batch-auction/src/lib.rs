@@ -414,10 +414,13 @@ pub mod batch_auction {
             //         = total_sol / (total_supply * buyer_bps / 10_000)
             let buyer_pool_tokens = (auction.total_supply as u128)
                 .checked_mul(auction.buyer_bps as u128)
-                .and_then(|v| v.checked_div(BPS_DENOMINATOR as u128))
-                .unwrap_or(0);
+                .ok_or(BatchAuctionError::Overflow)?
+                .checked_div(BPS_DENOMINATOR as u128)
+                .ok_or(BatchAuctionError::Overflow)?;
             auction.uniform_price = if buyer_pool_tokens > 0 {
-                ((auction.total_sol as u128) / buyer_pool_tokens) as u64
+                ((auction.total_sol as u128)
+                    .checked_div(buyer_pool_tokens)
+                    .ok_or(BatchAuctionError::Overflow)?) as u64
             } else {
                 0
             };

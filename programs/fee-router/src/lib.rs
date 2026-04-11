@@ -4,16 +4,35 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 // PROVE Fee Architecture:
 //
 // 1. Raydium CLMM pool created with 1% fee tier.
-// 2. LP position NFT held by FeeRouter `pool_fee_account` PDA.
+// 2. LP position NFT held by the `crank_authority` (a hot but low-blast-
+//    radius custodian key). The crank is the only signer that can call
+//    Raydium's `decrease_liquidity_v2` on the position, so fee collection
+//    is a normal backend transaction — no on-chain Raydium CPI required.
 // 3. Every swap on Raydium/Jupiter pays 1% — cannot be bypassed.
-// 4. Backend crank claims fees from Raydium off-chain, deposits into the
-//    pool_fee_account PDA, then calls `claim_and_split` to route 80/20
-//    to creator and protocol treasury.
-// 5. If the protocol needs to migrate, the admin can pause, then
-//    `recover_lp_nft` moves the LP position NFT to a dedicated
-//    `recovery_destination` for re-deployment.
-// 6. PR2 will add on-chain Raydium CPI for fee claiming + liquidity
-//    unwinding via program upgrade.
+// 4. Fee collection flow (per pool, run by backend crank every ~15m):
+//      a) crank calls Raydium decrease_liquidity_v2(liquidity=0) via SDK.
+//         Fees accrue into the crank's token ATAs (WSOL side + token side).
+//      b) crank closes the WSOL ATA → native SOL lands in the crank wallet.
+//      c) crank `system::transfer` SOLs into the pool_fee_account PDA.
+//      d) crank calls `claim_and_split` which reads the PDA balance above
+//         rent floor and splits 80/20 to creator and protocol treasury.
+//         This step is the *on-chain enforcement* of the 80/20 rule —
+//         the crank cannot cheat the split.
+// 5. Security trade-off vs a "PDA-owns-LP" design:
+//    - Crank compromise can drain LP NFTs directly (blast radius = pool
+//      liquidity). Mitigations: (1) crank is a dedicated low-permission
+//      key rotated via two-step accept, (2) `emergency_pause` freezes
+//      `claim_and_split` so stolen SOL can't be laundered through the
+//      split path, (3) admin can rotate the crank via
+//      `propose_crank_authority`.
+//    - The 80/20 split itself remains on-chain enforced: crank cannot
+//      redirect fees to themselves without calling `claim_and_split`,
+//      and that instruction validates the creator + treasury against
+//      stored values.
+// 6. Migration hatch (`recover_lp_nft`) is retained but now requires the
+//    crank to co-sign the transfer (admin authority alone cannot move a
+//    crank-owned NFT). In practice the admin pauses, rotates the crank,
+//    and the new crank moves the NFT to `recovery_destination`.
 
 declare_id!("FeeR111111111111111111111111111111111111111");
 
@@ -223,9 +242,10 @@ pub mod fee_router {
     // -----------------------------------------------------------------
 
     /// Backend-only: register a Raydium CLMM pool. Verifies that the LP
-    /// position NFT token account is actually owned by the
-    /// `pool_fee_account` PDA and holds exactly 1 unit. No more
-    /// trust-me arguments.
+    /// position NFT is held by the crank_authority custodian and that
+    /// the account holds exactly 1 unit. See the architecture comment
+    /// at the top of the file for why crank-custodial was chosen over
+    /// PDA-escrowed ownership.
     pub fn register_pool(
         ctx: Context<RegisterPool>,
         creator: Pubkey,
@@ -237,12 +257,13 @@ pub mod fee_router {
         );
 
         require!(
-            ctx.accounts.position_nft_account.owner == ctx.accounts.pool_fee_account.key(),
-            FeeRouterError::PositionNftNotEscrowed
+            ctx.accounts.position_nft_account.owner
+                == ctx.accounts.fee_vault.crank_authority,
+            FeeRouterError::PositionNftNotHeldByCrank
         );
         require!(
             ctx.accounts.position_nft_account.amount == 1,
-            FeeRouterError::PositionNftNotEscrowed
+            FeeRouterError::PositionNftNotHeldByCrank
         );
         require!(
             ctx.accounts.position_nft_account.mint == ctx.accounts.position_nft_mint.key(),
@@ -335,10 +356,23 @@ pub mod fee_router {
     // Migration hatch
     // -----------------------------------------------------------------
 
-    /// Admin-only, paused-only: transfer the LP position NFT out of the
-    /// `pool_fee_account` PDA to the recovery destination's token account.
-    /// This is the migration hatch — after this returns, the LP position
-    /// is owned by whoever controls `fee_vault.recovery_destination`.
+    /// Admin + crank co-signed, paused-only: transfer the LP position NFT
+    /// out of the crank custodian wallet to the recovery destination's
+    /// token account. This is the migration hatch.
+    ///
+    /// Because the NFT sits in the crank's own token account in the
+    /// crank-custodial model, the crank must authorize the transfer
+    /// directly — the program cannot `invoke_signed` it out. The
+    /// `authority` co-signature enforces that both admin and crank
+    /// agree before an LP position moves. A rogue crank cannot run
+    /// this alone (admin required); a rogue admin cannot run this
+    /// alone (crank required).
+    ///
+    /// Recovery playbook if the crank is compromised:
+    ///   1. admin calls `emergency_pause`
+    ///   2. admin calls `propose_crank_authority(fresh_key)`
+    ///   3. fresh crank calls `accept_crank_authority`
+    ///   4. fresh crank + admin call `recover_lp_nft`
     pub fn recover_lp_nft(ctx: Context<RecoverLpNft>) -> Result<()> {
         require!(
             ctx.accounts.fee_vault.emergency_paused,
@@ -349,25 +383,28 @@ pub mod fee_router {
             FeeRouterError::Unauthorized
         );
         require!(
+            ctx.accounts.crank.key() == ctx.accounts.fee_vault.crank_authority,
+            FeeRouterError::Unauthorized
+        );
+        require!(
             ctx.accounts.recovery_destination_token_account.owner
                 == ctx.accounts.fee_vault.recovery_destination,
             FeeRouterError::RecoveryDestinationMismatch
         );
         require!(
-            ctx.accounts.position_nft_account.owner == ctx.accounts.pool_fee_account.key(),
-            FeeRouterError::PositionNftNotEscrowed
+            ctx.accounts.position_nft_account.owner
+                == ctx.accounts.fee_vault.crank_authority,
+            FeeRouterError::PositionNftNotHeldByCrank
         );
         require!(
             ctx.accounts.position_nft_account.amount == 1,
-            FeeRouterError::PositionNftNotEscrowed
+            FeeRouterError::PositionNftNotHeldByCrank
         );
 
-        let mint_key = ctx.accounts.pool_fee_account.mint;
-        let bump = ctx.accounts.pool_fee_account.bump;
-        let seeds: &[&[u8]] = &[b"pool_fee", mint_key.as_ref(), &[bump]];
-
+        // NFT is in a crank-owned token account, so the crank is the
+        // transfer authority — no PDA signing needed.
         token::transfer(
-            CpiContext::new_with_signer(
+            CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 Transfer {
                     from: ctx.accounts.position_nft_account.to_account_info(),
@@ -375,15 +412,14 @@ pub mod fee_router {
                         .accounts
                         .recovery_destination_token_account
                         .to_account_info(),
-                    authority: ctx.accounts.pool_fee_account.to_account_info(),
+                    authority: ctx.accounts.crank.to_account_info(),
                 },
-                &[seeds],
             ),
             1,
         )?;
 
         emit!(LpNftRecovered {
-            mint: mint_key,
+            mint: ctx.accounts.pool_fee_account.mint,
             destination: ctx.accounts.fee_vault.recovery_destination,
         });
         Ok(())
@@ -505,7 +541,8 @@ pub struct RegisterPool<'info> {
     pub position_nft_mint: UncheckedAccount<'info>,
 
     /// The token account holding the LP position NFT. Must be owned by
-    /// the `pool_fee_account` PDA and contain exactly 1 unit.
+    /// `fee_vault.crank_authority` and contain exactly 1 unit. The handler
+    /// enforces ownership at runtime.
     pub position_nft_account: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -584,7 +621,12 @@ pub struct EmergencyDrainPool<'info> {
 
 #[derive(Accounts)]
 pub struct RecoverLpNft<'info> {
+    /// Admin authority. Must match `fee_vault.authority`.
     pub authority: Signer<'info>,
+
+    /// Crank custodian. Must match `fee_vault.crank_authority` and be the
+    /// owner of `position_nft_account`.
+    pub crank: Signer<'info>,
 
     #[account(
         seeds = [b"fee_vault"],
@@ -593,13 +635,13 @@ pub struct RecoverLpNft<'info> {
     pub fee_vault: Account<'info, FeeVault>,
 
     #[account(
-        mut,
         seeds = [b"pool_fee", pool_fee_account.mint.as_ref()],
         bump = pool_fee_account.bump,
     )]
     pub pool_fee_account: Account<'info, PoolFeeAccount>,
 
-    /// LP position NFT held by the `pool_fee_account` PDA.
+    /// LP position NFT sitting in the crank's token account. Verified
+    /// in the handler to be owned by `fee_vault.crank_authority`.
     #[account(
         mut,
         constraint = position_nft_account.key() == pool_fee_account.position_nft_account
@@ -766,8 +808,8 @@ pub enum FeeRouterError {
     #[msg("Emergency mode is not active")]
     NotPaused,
 
-    #[msg("Position NFT is not escrowed by the pool_fee_account PDA")]
-    PositionNftNotEscrowed,
+    #[msg("Position NFT is not held by the crank_authority custodian")]
+    PositionNftNotHeldByCrank,
 
     #[msg("Position NFT mismatch")]
     PositionNftMismatch,

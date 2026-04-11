@@ -4,7 +4,8 @@ import { TokenRow } from "@/components/TokenRow";
 import type { TokenRowProps } from "@/components/TokenRow";
 import { DiscoverClient } from "./DiscoverClient";
 
-const API_BASE = process.env.INDEXER_API_URL ?? "http://localhost:4000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_INDEXER_URL ?? "http://localhost:4000";
 
 /* ── API types ── */
 

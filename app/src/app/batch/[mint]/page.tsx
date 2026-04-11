@@ -21,7 +21,8 @@ interface AuctionData {
   minSol: number;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_INDEXER_API_URL ?? "http://localhost:4000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_INDEXER_URL ?? "http://localhost:4000";
 const MIN_COMMITMENT_SOL = 0.1;
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 

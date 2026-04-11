@@ -1,5 +1,3 @@
-import { PublicKey } from "@solana/web3.js";
-
 // Fee Architecture:
 // - Raydium CLMM pool with 1% fee tier (cannot be bypassed)
 // - LP position owned by FeeRouter PDA
@@ -42,13 +40,8 @@ export const FEED_WEIGHT_VOLUME_24H = 0.3;
 export const FEED_WEIGHT_HOLD_TIME = 0.2;
 export const FEED_WEIGHT_QUESTS = 0.1;
 
-// Program IDs (placeholder - replace with deployed addresses)
-// Post-auction liquidity pools are created on Raydium CLMM (concentrated liquidity).
-export const PROGRAM_IDS = {
-  batchAuction: new PublicKey("BAuc111111111111111111111111111111111111111"),
-  feeRouter: new PublicKey("FeeR111111111111111111111111111111111111111"),
-  stakeManager: new PublicKey("Stak111111111111111111111111111111111111111"),
-  raydiumClmm: new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"), // Raydium CLMM
-} as const;
+// Program IDs are read from env vars by each consumer (indexer, frontend,
+// scripts) — see programs.ts in the app and listener.ts in the indexer.
+// This package intentionally does NOT re-export them to avoid stale fallbacks.
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;
