@@ -5,9 +5,20 @@ import { Connection, PublicKey } from "@solana/web3.js";
 // surface immediately instead of producing silent on-chain errors.
 // ---------------------------------------------------------------------------
 
+// Placeholder used during Next.js static generation (SSG) when env vars
+// aren't available. The real IDs are only needed at runtime when the user
+// signs transactions — SSG pages never call into Solana.
+const SSG_PLACEHOLDER = "11111111111111111111111111111111";
+
 function requireProgramId(envVar: string): PublicKey {
   const raw = process.env[envVar];
   if (!raw) {
+    // During `next build` SSG, env vars may not be set. Return a
+    // placeholder so the build succeeds — the value is never used
+    // at build time (only client-side transaction builders call it).
+    if (typeof window === "undefined" && process.env.NEXT_PHASE === "phase-production-build") {
+      return new PublicKey(SSG_PLACEHOLDER);
+    }
     throw new Error(
       `Missing required env var ${envVar}. Set it in .env or .env.local.`,
     );
