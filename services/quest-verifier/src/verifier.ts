@@ -201,8 +201,15 @@ async function checkXPosts(quest: QuestWithAuction): Promise<void> {
       `https://api.twitter.com/2/tweets/search/recent?${params.toString()}`,
       {
         headers: { Authorization: `Bearer ${bearerToken}` },
+        signal: AbortSignal.timeout(30_000),
       }
     );
+
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("retry-after");
+      console.warn(`[verifier] X API rate limited, retry after ${retryAfter ?? "unknown"}s`);
+      return;
+    }
 
     if (!response.ok) {
       console.error(`[verifier] X API returned ${response.status}: ${response.statusText}`);

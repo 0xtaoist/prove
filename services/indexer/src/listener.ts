@@ -158,7 +158,7 @@ async function handleBatchAuctionEvent(log: string, signature: string): Promise<
 }
 
 async function onAuctionCreated(log: string, signature: string): Promise<void> {
-  const data = parseEventData(log);
+  const data = parseEventData(log, ["mint", "creator", "ticker", "total_supply", "start_time", "end_time"]);
   if (!data) return;
   if (!data.creator) {
     console.error("[listener] AuctionCreated missing creator, refusing to index", { signature });
@@ -193,7 +193,7 @@ async function onAuctionCreated(log: string, signature: string): Promise<void> {
 }
 
 async function onSolCommitted(log: string): Promise<void> {
-  const data = parseEventData(log);
+  const data = parseEventData(log, ["mint", "participant", "amount"]);
   if (!data) return;
   await prisma.commitment.upsert({
     where: {
@@ -220,7 +220,7 @@ async function onSolCommitted(log: string): Promise<void> {
 
 async function onAuctionFinalized(log: string): Promise<void> {
   // On-chain emits a single AuctionFinalized event with succeeded: bool.
-  const data = parseEventData(log);
+  const data = parseEventData(log, ["mint", "succeeded", "participant_count"]);
   if (!data) return;
   const succeeded = data.succeeded === "true" || data.succeeded === "1";
   await prisma.auction.update({
@@ -234,7 +234,7 @@ async function onAuctionFinalized(log: string): Promise<void> {
 }
 
 async function onTokensClaimed(log: string): Promise<void> {
-  const data = parseEventData(log);
+  const data = parseEventData(log, ["mint", "participant", "tokens_received"]);
   if (!data) return;
   await prisma.commitment.update({
     where: {
@@ -377,17 +377,7 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
         });
         console.log(`[listener] Milestone passed — stake returned: ${data.mint}`);
       } else {
-        const pool = await prisma.forfeitPool.findFirst();
-        if (pool) {
-          await prisma.forfeitPool.update({
-            where: { id: pool.id },
-            data: { totalForfeited: { increment: BigInt(data.amount) } },
-          });
-        } else {
-          await prisma.forfeitPool.create({
-            data: { totalForfeited: BigInt(data.amount) },
-          });
-        }
+        await incrementForfeitPool(BigInt(data.amount));
         console.log(`[listener] Milestone failed — stake forfeited: ${data.mint}`);
       }
     } else if (log.includes("StakeForfeited")) {
@@ -403,17 +393,7 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
         },
       });
 
-      const pool = await prisma.forfeitPool.findFirst();
-      if (pool) {
-        await prisma.forfeitPool.update({
-          where: { id: pool.id },
-          data: { totalForfeited: { increment: BigInt(data.amount) } },
-        });
-      } else {
-        await prisma.forfeitPool.create({
-          data: { totalForfeited: BigInt(data.amount) },
-        });
-      }
+      await incrementForfeitPool(BigInt(data.amount));
       console.log(`[listener] Stake forfeited (auction failed): ${data.mint}`);
     } else if (log.includes("StakeEmergencyWithdrawn")) {
       const data = parseEventData(log);
@@ -434,10 +414,13 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
 
 // ─── Helpers ───────────────────────────────────────────────
 
-function parseEventData(log: string): Record<string, string> | null {
-  // Expected formats:
+function parseEventData(
+  log: string,
+  requiredFields?: string[],
+): Record<string, string> | null {
+  // Expected format from Anchor emit!():
   //   "EventName { key: value, key2: value2 }"
-  //   or JSON-style after the event name
+  // We extract the first { ... } block and coerce it into valid JSON.
   try {
     const jsonMatch = log.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -452,13 +435,42 @@ function parseEventData(log: string): Record<string, string> | null {
           return `: "${trimmed}"`;
         });
 
-      return JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr) as Record<string, string>;
+
+      // Validate that expected fields exist so we don't act on mismatched data
+      if (requiredFields) {
+        for (const f of requiredFields) {
+          if (parsed[f] === undefined) {
+            console.warn(`[listener] parseEventData: missing required field '${f}'`);
+            return null;
+          }
+        }
+      }
+
+      return parsed;
     }
   } catch {
     // parse failed
   }
 
   return null;
+}
+
+/** Atomically increment the singleton ForfeitPool row, creating it if absent. */
+async function incrementForfeitPool(amount: bigint): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const pool = await tx.forfeitPool.findFirst();
+    if (pool) {
+      await tx.forfeitPool.update({
+        where: { id: pool.id },
+        data: { totalForfeited: { increment: amount } },
+      });
+    } else {
+      await tx.forfeitPool.create({
+        data: { totalForfeited: amount },
+      });
+    }
+  });
 }
 
 export function stopListener(): void {

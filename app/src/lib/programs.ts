@@ -1,22 +1,30 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 // ---------------------------------------------------------------------------
-// Program IDs – read from env with fallback placeholders
+// Program IDs – read from env; fail loudly if missing so broken deploys
+// surface immediately instead of producing silent on-chain errors.
 // ---------------------------------------------------------------------------
 
-export const BATCH_AUCTION_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID ??
-    "BAuc111111111111111111111111111111111111111",
+function requireProgramId(envVar: string): PublicKey {
+  const raw = process.env[envVar];
+  if (!raw) {
+    throw new Error(
+      `Missing required env var ${envVar}. Set it in .env or .env.local.`,
+    );
+  }
+  return new PublicKey(raw);
+}
+
+export const BATCH_AUCTION_PROGRAM_ID = requireProgramId(
+  "NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID",
 );
 
-export const STAKE_MANAGER_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID ??
-    "Stak111111111111111111111111111111111111111",
+export const STAKE_MANAGER_PROGRAM_ID = requireProgramId(
+  "NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID",
 );
 
-export const FEE_ROUTER_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID ??
-    "FeeR111111111111111111111111111111111111111",
+export const FEE_ROUTER_PROGRAM_ID = requireProgramId(
+  "NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID",
 );
 
 // Raydium CLMM for concentrated liquidity pool creation

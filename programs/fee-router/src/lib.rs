@@ -252,6 +252,10 @@ pub mod fee_router {
         raydium_pool_id: Pubkey,
     ) -> Result<()> {
         require!(
+            !ctx.accounts.fee_vault.emergency_paused,
+            FeeRouterError::Paused
+        );
+        require!(
             ctx.accounts.crank.key() == ctx.accounts.fee_vault.crank_authority,
             FeeRouterError::Unauthorized
         );
@@ -296,6 +300,10 @@ pub mod fee_router {
     /// Reads the actual PDA balance instead of trusting caller-supplied
     /// amounts.
     pub fn claim_and_split(ctx: Context<ClaimAndSplit>) -> Result<()> {
+        require!(
+            !ctx.accounts.fee_vault.emergency_paused,
+            FeeRouterError::Paused
+        );
         require!(
             ctx.accounts.crank.key() == ctx.accounts.fee_vault.crank_authority,
             FeeRouterError::Unauthorized
@@ -807,6 +815,9 @@ pub enum FeeRouterError {
 
     #[msg("Emergency mode is not active")]
     NotPaused,
+
+    #[msg("Protocol is paused")]
+    Paused,
 
     #[msg("Position NFT is not held by the crank_authority custodian")]
     PositionNftNotHeldByCrank,

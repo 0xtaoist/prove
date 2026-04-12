@@ -91,6 +91,7 @@ model Swap {
   auction Auction @relation(fields: [auctionMint], references: [mint])
 
   @@index([auctionMint, timestamp])
+  @@index([wallet, timestamp])
   @@index([wallet])
 }
 
@@ -144,6 +145,7 @@ model HolderSnapshot {
 
   @@unique([mint, wallet])
   @@index([mint])
+  @@index([wallet])
 }
 
 // ─── Prove Scores ───────────────────────────────────────
@@ -200,6 +202,7 @@ model CreatorFee {
 
   @@unique([mint, creator])
   @@index([creator])
+  @@index([mint])
 }
 
 // ─── Forfeit Pool ───────────────────────────────────────

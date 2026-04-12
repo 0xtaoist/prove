@@ -353,7 +353,8 @@ export default function LaunchPage() {
                     }
                     // Persist the creator <> Privy mapping BEFORE sending the
                     // on-chain tx so the indexer already has the row when
-                    // AuctionCreated lands.
+                    // AuctionCreated lands. If this fails, abort — sending
+                    // the on-chain tx without an indexer row causes FK errors.
                     try {
                       await registerCreator({
                         wallet: publicKey.toBase58(),
@@ -361,6 +362,9 @@ export default function LaunchPage() {
                       });
                     } catch (err) {
                       console.error("[launch] registerCreator failed", err);
+                      setErrors({ ticker: "Failed to register creator. Please try again." });
+                      setShowModal(false);
+                      return;
                     }
                     const sig = await createAuction(
                       form.ticker,

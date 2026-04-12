@@ -8,7 +8,7 @@ declare_id!("BAuc111111111111111111111111111111111111111");
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MIN_WALLETS: u16 = 50;
+const DEFAULT_MIN_WALLETS: u32 = 50;
 const DEFAULT_MIN_SOL: u64 = 10_000_000_000; // 10 SOL
 const DEFAULT_AUCTION_DURATION: i64 = 300; // 5 minutes
 const MAX_TICKER_LEN: usize = 10;
@@ -66,7 +66,7 @@ pub mod batch_auction {
     /// keep the buyer_bps they snapshotted at creation time.
     pub fn update_config(
         ctx: Context<AdminOnly>,
-        new_min_wallets: Option<u16>,
+        new_min_wallets: Option<u32>,
         new_min_sol: Option<u64>,
         new_auction_duration: Option<i64>,
         new_buyer_bps: Option<u16>,
@@ -736,7 +736,7 @@ pub struct AuctionConfig {
     pub crank_authority: Pubkey,
     pub pending_crank_authority: Pubkey,
     /// Minimum unique commitments for an auction to succeed.
-    pub min_wallets: u16,
+    pub min_wallets: u32,
     /// Minimum total SOL (lamports) for success.
     pub min_sol: u64,
     /// Auction duration in seconds.
@@ -751,9 +751,9 @@ pub struct AuctionConfig {
 }
 
 impl AuctionConfig {
-    // discriminator(8) + 4*pubkey(128) + min_wallets(2) + min_sol(8)
+    // discriminator(8) + 4*pubkey(128) + min_wallets(4) + min_sol(8)
     // + auction_duration(8) + buyer_bps(2) + emergency_paused(1)
-    pub const LEN: usize = 8 + (4 * 32) + 2 + 8 + 8 + 2 + 1;
+    pub const LEN: usize = 8 + (4 * 32) + 4 + 8 + 8 + 2 + 1;
 }
 
 #[account]
@@ -765,7 +765,7 @@ pub struct Auction {
     pub end_time: i64,
     pub total_sol: u64,
     pub total_supply: u64,
-    pub participant_count: u16,
+    pub participant_count: u32,
     pub state: AuctionState,
     pub uniform_price: u64,
     /// Raydium pool address, set by `set_pool_id` after the backend crank
@@ -786,11 +786,11 @@ pub struct Auction {
 
 impl Auction {
     // discriminator(8) + creator(32) + mint(32) + string prefix(4) + max_ticker(10)
-    // + start(8) + end(8) + total_sol(8) + total_supply(8) + count(2)
+    // + start(8) + end(8) + total_sol(8) + total_supply(8) + count(4)
     // + state(1) + uniform_price(8) + pool_id(32) + pool_created(1)
     // + pool_seeded(1) + buyer_bps(2) + bump(1)
     pub const LEN: usize =
-        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 2 + 1 + 8 + 32 + 1 + 1 + 2 + 1;
+        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 4 + 1 + 8 + 32 + 1 + 1 + 2 + 1;
 }
 
 #[account]
@@ -1130,7 +1130,7 @@ pub struct SeedPool<'info> {
 #[event]
 pub struct ConfigInitialized {
     pub authority: Pubkey,
-    pub min_wallets: u16,
+    pub min_wallets: u32,
     pub min_sol: u64,
     pub auction_duration: i64,
     pub buyer_bps: u16,
@@ -1138,7 +1138,7 @@ pub struct ConfigInitialized {
 
 #[event]
 pub struct ConfigUpdated {
-    pub min_wallets: u16,
+    pub min_wallets: u32,
     pub min_sol: u64,
     pub auction_duration: i64,
     pub buyer_bps: u16,
@@ -1197,7 +1197,7 @@ pub struct SolCommitted {
     pub participant: Pubkey,
     pub amount: u64,
     pub total_sol: u64,
-    pub participant_count: u16,
+    pub participant_count: u32,
 }
 
 #[event]
@@ -1205,7 +1205,7 @@ pub struct AuctionFinalized {
     pub mint: Pubkey,
     pub succeeded: bool,
     pub total_sol: u64,
-    pub participant_count: u16,
+    pub participant_count: u32,
 }
 
 #[event]

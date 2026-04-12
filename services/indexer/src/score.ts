@@ -24,13 +24,20 @@ async function calculateAllScores(): Promise<void> {
     // Gather all wallets that have any on-chain activity
     const wallets = await getActiveWallets();
     let updated = 0;
+    const BATCH_SIZE = 500;
 
-    for (const wallet of wallets) {
-      try {
-        await calculateWalletScore(wallet);
-        updated++;
-      } catch (err) {
-        console.error(`[score] Failed to calculate score for ${wallet}:`, err);
+    for (let i = 0; i < wallets.length; i += BATCH_SIZE) {
+      const batch = wallets.slice(i, i + BATCH_SIZE);
+      for (const wallet of batch) {
+        try {
+          await calculateWalletScore(wallet);
+          updated++;
+        } catch (err) {
+          console.error(`[score] Failed to calculate score for ${wallet}:`, err);
+        }
+      }
+      if (i + BATCH_SIZE < wallets.length) {
+        console.log(`[score] Progress: ${Math.min(i + BATCH_SIZE, wallets.length)}/${wallets.length} wallets`);
       }
     }
 
@@ -64,13 +71,22 @@ async function calculateWalletScore(wallet: string): Promise<void> {
     where: { wallet, balance: { gt: 0 } },
   });
 
+  // Batch-fetch all auctions for held mints to avoid N+1 queries
+  const heldMintsList = holdings.map((h) => h.mint);
+  const auctions = heldMintsList.length > 0
+    ? await prisma.auction.findMany({
+        where: { mint: { in: heldMintsList } },
+        select: { mint: true, state: true },
+      })
+    : [];
+  const auctionStateByMint = new Map(auctions.map((a) => [a.mint, a.state]));
+
   let totalHoldTimeHours = 0;
   for (const h of holdings) {
     const holdMs = now.getTime() - h.firstSeen.getTime();
     const holdHours = holdMs / HOUR_MS;
     // Weight by whether the auction's token is still trading
-    const auction = await prisma.auction.findUnique({ where: { mint: h.mint } });
-    const weight = auction?.state === "TRADING" ? 1.0 : 0.5;
+    const weight = auctionStateByMint.get(h.mint) === "TRADING" ? 1.0 : 0.5;
     totalHoldTimeHours += holdHours * weight;
   }
 

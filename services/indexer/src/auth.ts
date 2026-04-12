@@ -33,7 +33,11 @@ export async function requirePrivyAuth(
 ): Promise<void> {
   const client = getPrivyClient();
   if (!client) {
-    // Dev mode: no Privy credentials configured, allow through
+    if (process.env.NODE_ENV === "production") {
+      res.status(503).json(errorResponse("Authentication service not configured"));
+      return;
+    }
+    // Dev mode only: no Privy credentials configured, allow through
     next();
     return;
   }
