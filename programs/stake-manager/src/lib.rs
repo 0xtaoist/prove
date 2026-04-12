@@ -237,6 +237,11 @@ pub mod stake_manager {
     /// `batch_auction::create_auction` so the stake is always tied to a
     /// real launch. Direct calls also work.
     pub fn deposit_stake(ctx: Context<DepositStake>) -> Result<()> {
+        require!(
+            !ctx.accounts.stake_vault.emergency_paused,
+            StakeError::Paused
+        );
+
         system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
@@ -290,6 +295,10 @@ pub mod stake_manager {
         ctx: Context<EvaluateMilestone>,
         milestone_passed: bool,
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.stake_vault.emergency_paused,
+            StakeError::Paused
+        );
         require!(
             ctx.accounts.oracle.key() == ctx.accounts.stake_vault.oracle_authority,
             StakeError::Unauthorized
@@ -360,6 +369,10 @@ pub mod stake_manager {
     pub fn forfeit_stake_for_failed_auction(
         ctx: Context<ForfeitStake>,
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.stake_vault.emergency_paused,
+            StakeError::Paused
+        );
         require!(
             ctx.accounts.crank.key() == ctx.accounts.stake_vault.crank_authority,
             StakeError::Unauthorized
@@ -745,6 +758,8 @@ pub enum StakeError {
     NothingToDistribute,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Protocol is paused")]
+    Paused,
     #[msg("Emergency mode is not active")]
     NotPaused,
     #[msg("Stake has already been withdrawn")]

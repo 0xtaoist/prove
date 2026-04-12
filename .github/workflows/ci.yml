@@ -47,4 +47,4 @@ jobs:
       - name: Lint
         run: pnpm lint
       - name: Audit npm dependencies
-        run: pnpm audit --prod || true
+        run: pnpm audit --prod --audit-level=high

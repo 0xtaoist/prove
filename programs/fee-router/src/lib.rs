@@ -223,10 +223,31 @@ pub mod fee_router {
             ctx.accounts.fee_vault.creator_bps,
         )?;
 
+        // Compute the per-recipient breakdown so accounting stays consistent
+        // with claim_and_split — callers of total_sol_to_creator/protocol
+        // (e.g. indexer dashboards) get correct totals.
+        let creator_bps = ctx.accounts.fee_vault.creator_bps;
+        let to_creator = (drainable as u128)
+            .checked_mul(creator_bps as u128)
+            .ok_or(FeeRouterError::MathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(FeeRouterError::MathOverflow)? as u64;
+        let to_protocol = drainable
+            .checked_sub(to_creator)
+            .ok_or(FeeRouterError::MathOverflow)?;
+
         let pool_fee = &mut ctx.accounts.pool_fee_account;
         pool_fee.total_sol_claimed = pool_fee
             .total_sol_claimed
             .checked_add(drainable)
+            .ok_or(FeeRouterError::MathOverflow)?;
+        pool_fee.total_sol_to_creator = pool_fee
+            .total_sol_to_creator
+            .checked_add(to_creator)
+            .ok_or(FeeRouterError::MathOverflow)?;
+        pool_fee.total_sol_to_protocol = pool_fee
+            .total_sol_to_protocol
+            .checked_add(to_protocol)
             .ok_or(FeeRouterError::MathOverflow)?;
         pool_fee.last_claim = Clock::get()?.unix_timestamp;
 

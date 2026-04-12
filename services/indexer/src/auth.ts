@@ -33,12 +33,13 @@ export async function requirePrivyAuth(
 ): Promise<void> {
   const client = getPrivyClient();
   if (!client) {
-    if (process.env.NODE_ENV === "production") {
-      res.status(503).json(errorResponse("Authentication service not configured"));
+    if (process.env.DISABLE_AUTH === "true" && process.env.NODE_ENV !== "production") {
+      // Dev mode only: explicit opt-in to skip auth via DISABLE_AUTH=true
+      console.warn("[auth] DISABLE_AUTH=true — skipping authentication (dev only)");
+      next();
       return;
     }
-    // Dev mode only: no Privy credentials configured, allow through
-    next();
+    res.status(503).json(errorResponse("Authentication service not configured"));
     return;
   }
 

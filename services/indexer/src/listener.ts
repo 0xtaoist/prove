@@ -195,25 +195,40 @@ async function onAuctionCreated(log: string, signature: string): Promise<void> {
 async function onSolCommitted(log: string): Promise<void> {
   const data = parseEventData(log, ["mint", "participant", "amount"]);
   if (!data) return;
-  await prisma.commitment.upsert({
-    where: {
-      auctionMint_wallet: { auctionMint: data.mint, wallet: data.participant },
-    },
-    create: {
-      auctionMint: data.mint,
-      wallet: data.participant,
-      solAmount: BigInt(data.amount),
-    },
-    update: {
-      solAmount: { increment: BigInt(data.amount) },
-    },
-  });
-  await prisma.auction.update({
-    where: { mint: data.mint },
-    data: {
-      totalSol: { increment: BigInt(data.amount) },
-      participantCount: { increment: 1 },
-    },
+
+  // Use a transaction to atomically create-or-update the commitment and
+  // only increment participantCount when the commitment is genuinely new.
+  // This prevents double-counting if the same event is delivered twice
+  // (e.g. WebSocket reconnection, duplicate log delivery).
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.commitment.findUnique({
+      where: {
+        auctionMint_wallet: { auctionMint: data.mint, wallet: data.participant },
+      },
+    });
+
+    if (existing) {
+      // Duplicate event — commitment PDA is init-only on-chain so the
+      // same wallet can never commit twice. Skip to avoid inflating totals.
+      console.warn(`[listener] Duplicate SolCommitted for ${data.participant} on ${data.mint}, skipping`);
+      return;
+    }
+
+    await tx.commitment.create({
+      data: {
+        auctionMint: data.mint,
+        wallet: data.participant,
+        solAmount: BigInt(data.amount),
+      },
+    });
+
+    await tx.auction.update({
+      where: { mint: data.mint },
+      data: {
+        totalSol: { increment: BigInt(data.amount) },
+        participantCount: { increment: 1 },
+      },
+    });
   });
   console.log(`[listener] SOL committed: ${data.participant} -> ${data.mint}`);
 }
@@ -283,8 +298,29 @@ async function onPoolIdSet(log: string): Promise<void> {
 }
 
 async function onCommitmentEmergencyRefunded(log: string): Promise<void> {
-  const data = parseEventData(log);
+  const data = parseEventData(log, ["mint", "participant", "amount"]);
   if (!data) return;
+
+  // Persist the refund: mark the commitment as claimed (prevents re-claim)
+  // and decrement the auction's totalSol / participantCount so off-chain
+  // state stays consistent with on-chain after emergency refunds.
+  await prisma.$transaction(async (tx) => {
+    await tx.commitment.updateMany({
+      where: {
+        auctionMint: data.mint,
+        wallet: data.participant,
+      },
+      data: { tokensClaimed: true },
+    });
+    await tx.auction.update({
+      where: { mint: data.mint },
+      data: {
+        totalSol: { decrement: BigInt(data.amount) },
+        participantCount: { decrement: 1 },
+      },
+    });
+  });
+
   console.log(
     `[listener] Emergency refund: ${data.participant} on ${data.mint} (${data.amount} lamports)`,
   );

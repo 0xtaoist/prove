@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import apiRouter from "./api";
 import { startVerificationLoop } from "./verifier";
@@ -19,7 +20,9 @@ app.use(
     methods: ["GET", "POST"],
   })
 );
-app.use(express.json());
+// Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, etc.)
+app.use(helmet());
+app.use(express.json({ limit: "10kb" }));
 
 // Health check (exempt from rate limiting)
 app.get("/health", (_req, res) => {

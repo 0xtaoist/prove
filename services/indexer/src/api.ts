@@ -1,6 +1,14 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "./db";
-import { serializeBigInts, isValidSolanaAddress, errorResponse } from "@prove/common";
+import {
+  serializeBigInts,
+  isValidSolanaAddress,
+  errorResponse,
+  FEED_WEIGHT_HOLDERS,
+  FEED_WEIGHT_VOLUME_24H,
+  FEED_WEIGHT_HOLD_TIME,
+  FEED_WEIGHT_QUESTS,
+} from "@prove/common";
 import { requirePrivyAuth, AuthenticatedRequest } from "./auth";
 
 const router: ReturnType<typeof Router> = Router();
@@ -72,10 +80,10 @@ async function computeFeedEntry(
   const questCount = auction.quests.length;
 
   const rank =
-    0.4 * holderCount +
-    0.3 * (volume24h / 1e9) +
-    0.2 * avgHoldTime +
-    0.1 * questCount;
+    FEED_WEIGHT_HOLDERS * holderCount +
+    FEED_WEIGHT_VOLUME_24H * (volume24h / 1e9) +
+    FEED_WEIGHT_HOLD_TIME * avgHoldTime +
+    FEED_WEIGHT_QUESTS * questCount;
 
   return {
     mint: auction.mint,
@@ -312,7 +320,6 @@ router.post("/api/creators", requirePrivyAuth, async (req: AuthenticatedRequest,
   try {
     const body = req.body as {
       wallet?: string;
-      privyUserId?: string | null;
       email?: string | null;
       handle?: string | null;
     };
@@ -321,6 +328,10 @@ router.post("/api/creators", requirePrivyAuth, async (req: AuthenticatedRequest,
       res.status(400).json(errorResponse("Invalid or missing 'wallet'"));
       return;
     }
+
+    // Use the verified Privy user ID from the auth token — never trust the
+    // request body for identity. This prevents impersonation / IDOR attacks.
+    const privyUserId = req.privyUserId ?? null;
 
     // Validate email format + length
     if (body.email != null) {
@@ -348,16 +359,28 @@ router.post("/api/creators", requirePrivyAuth, async (req: AuthenticatedRequest,
       }
     }
 
+    // Prevent wallet hijacking: if another Creator row already has this
+    // privyUserId linked to a *different* wallet, reject.
+    if (privyUserId) {
+      const existing = await prisma.creator.findFirst({
+        where: { privyUserId, NOT: { wallet } },
+      });
+      if (existing) {
+        res.status(409).json(errorResponse("This Privy account is already linked to a different wallet"));
+        return;
+      }
+    }
+
     const creator = await prisma.creator.upsert({
       where: { wallet },
       create: {
         wallet,
-        privyUserId: body.privyUserId ?? null,
+        privyUserId,
         email: body.email ?? null,
         handle: body.handle ?? null,
       },
       update: {
-        privyUserId: body.privyUserId ?? undefined,
+        privyUserId: privyUserId ?? undefined,
         email: body.email ?? undefined,
         handle: body.handle ?? undefined,
       },

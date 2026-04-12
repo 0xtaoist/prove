@@ -7,9 +7,13 @@ import { prisma } from "./db";
  *
  * If any of these three layers ever disagree, fee distribution is broken
  * and this service will refuse to start.
+ *
+ * NOTE: The DB column is named "creatorBps" / "protocolBps" for historical
+ * reasons, but the actual values represent whole-number percentages (80/20),
+ * NOT basis points (8000/2000). splitFee() divides by 100 accordingly.
  */
-export const REQUIRED_CREATOR_BPS = 80;
-export const REQUIRED_PROTOCOL_BPS = 20;
+export const REQUIRED_CREATOR_PCT = 80;
+export const REQUIRED_PROTOCOL_PCT = 20;
 const PLACEHOLDER_VAULT = "REPLACE_ME_PROTOCOL_VAULT";
 
 export interface ProtocolConfigSnapshot {
@@ -42,8 +46,8 @@ export async function assertProtocolConfig(): Promise<ProtocolConfigSnapshot> {
     cfg = await prisma.protocolConfig.create({
       data: {
         id: 1,
-        creatorBps: REQUIRED_CREATOR_BPS,
-        protocolBps: REQUIRED_PROTOCOL_BPS,
+        creatorBps: REQUIRED_CREATOR_PCT,
+        protocolBps: REQUIRED_PROTOCOL_PCT,
         protocolVaultAddress: envVault,
       },
     });
@@ -52,14 +56,14 @@ export async function assertProtocolConfig(): Promise<ProtocolConfigSnapshot> {
     );
   }
 
-  if (cfg.creatorBps !== REQUIRED_CREATOR_BPS) {
+  if (cfg.creatorBps !== REQUIRED_CREATOR_PCT) {
     throw new Error(
-      `ProtocolConfig.creatorBps is ${cfg.creatorBps}, expected ${REQUIRED_CREATOR_BPS}`,
+      `ProtocolConfig.creatorBps is ${cfg.creatorBps}, expected ${REQUIRED_CREATOR_PCT}`,
     );
   }
-  if (cfg.protocolBps !== REQUIRED_PROTOCOL_BPS) {
+  if (cfg.protocolBps !== REQUIRED_PROTOCOL_PCT) {
     throw new Error(
-      `ProtocolConfig.protocolBps is ${cfg.protocolBps}, expected ${REQUIRED_PROTOCOL_BPS}`,
+      `ProtocolConfig.protocolBps is ${cfg.protocolBps}, expected ${REQUIRED_PROTOCOL_PCT}`,
     );
   }
   if (
@@ -100,7 +104,7 @@ export function splitFee(totalLamports: bigint): {
   protocolLamports: bigint;
 } {
   const creatorLamports =
-    (totalLamports * BigInt(REQUIRED_CREATOR_BPS)) / BigInt(100);
+    (totalLamports * BigInt(REQUIRED_CREATOR_PCT)) / BigInt(100);
   const protocolLamports = totalLamports - creatorLamports;
   return { creatorLamports, protocolLamports };
 }

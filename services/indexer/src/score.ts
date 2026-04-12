@@ -1,10 +1,11 @@
 import { prisma } from "./db";
+import { PROVE_SCORE_CAP, PROVE_SCORE_DECAY_PER_WEEK } from "@prove/common";
 
 const HOUR_MS = 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * HOUR_MS;
 const SCORE_INTERVAL = HOUR_MS;
-const BENEFITS_CAP = 70;
-const DECAY_PER_WEEK = 2;
+const BENEFITS_CAP = PROVE_SCORE_CAP;
+const DECAY_PER_WEEK = PROVE_SCORE_DECAY_PER_WEEK;
 
 let timer: NodeJS.Timeout | undefined;
 
@@ -166,20 +167,24 @@ async function computeEarlyDumpRatio(wallet: string): Promise<number> {
 
   if (sells.length === 0) return 0;
 
+  // Batch-fetch all relevant holder snapshots to avoid N+1 queries.
+  // Previously each sell triggered an individual DB lookup.
+  const sellMints = [...new Set(sells.map((s) => s.auctionMint))];
+  const holders = await prisma.holderSnapshot.findMany({
+    where: { wallet, mint: { in: sellMints } },
+    select: { mint: true, firstSeen: true },
+  });
+  const holderMap = new Map(holders.map((h) => [h.mint, h.firstSeen]));
+
   let earlySold = BigInt(0);
   let totalSold = BigInt(0);
 
   for (const sell of sells) {
     totalSold += sell.tokenAmount;
 
-    // Check when the wallet first acquired the token
-    const holder = await prisma.holderSnapshot.findUnique({
-      where: { mint_wallet: { mint: sell.auctionMint, wallet } },
-      select: { firstSeen: true },
-    });
-
-    if (holder) {
-      const msSinceFirst = sell.timestamp.getTime() - holder.firstSeen.getTime();
+    const firstSeen = holderMap.get(sell.auctionMint);
+    if (firstSeen) {
+      const msSinceFirst = sell.timestamp.getTime() - firstSeen.getTime();
       if (msSinceFirst < HOUR_MS) {
         earlySold += sell.tokenAmount;
       }

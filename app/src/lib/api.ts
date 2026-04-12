@@ -79,16 +79,27 @@ export function fetchQuests(mint: string): Promise<Quest[]> {
  * Register (or update) the creator row for the given wallet. Called from the
  * launch flow BEFORE the on-chain create_auction so that the indexer has a
  * Creator row to FK against once AuctionCreated lands. Idempotent.
+ *
+ * @param accessToken - Privy access token from `usePrivy().getAccessToken()`.
+ *   Required in production; the indexer validates this via `requirePrivyAuth`.
  */
-export async function registerCreator(input: {
-  wallet: string;
-  privyUserId: string | null;
-  email?: string | null;
-  handle?: string | null;
-}): Promise<void> {
+export async function registerCreator(
+  input: {
+    wallet: string;
+    email?: string | null;
+    handle?: string | null;
+  },
+  accessToken: string | null,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
   const res = await fetch(`${BASE_URL}/api/creators`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(input),
   });
   if (!res.ok) {

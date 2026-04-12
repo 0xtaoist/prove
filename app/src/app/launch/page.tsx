@@ -29,7 +29,7 @@ const STAKE_AMOUNT = 2;
 export default function LaunchPage() {
   const { publicKey, connected } = useWallet();
   const { connection } = useConnection();
-  const { authenticated, privyUserId, login } = usePrivyWallet();
+  const { authenticated, login, getAccessToken } = usePrivyWallet();
   const { createAuction, loading: auctionLoading, error: auctionError, signature: auctionSig } = useAuction();
   const [balance, setBalance] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>({
@@ -356,10 +356,10 @@ export default function LaunchPage() {
                     // AuctionCreated lands. If this fails, abort — sending
                     // the on-chain tx without an indexer row causes FK errors.
                     try {
+                      const token = await getAccessToken();
                       await registerCreator({
                         wallet: publicKey.toBase58(),
-                        privyUserId: privyUserId ?? null,
-                      });
+                      }, token);
                     } catch (err) {
                       console.error("[launch] registerCreator failed", err);
                       setErrors({ ticker: "Failed to register creator. Please try again." });

@@ -290,8 +290,10 @@ pub mod batch_auction {
             total_supply,
         )?;
 
-        // --- Snapshot buyer_bps so later config changes don't affect this auction
+        // --- Snapshot config values so later admin changes don't affect this auction
         let snapshot_buyer_bps = config.buyer_bps;
+        let snapshot_min_wallets = config.min_wallets;
+        let snapshot_min_sol = config.min_sol;
         let auction_duration = config.auction_duration;
 
         // --- Populate auction state --------------------------------
@@ -313,6 +315,8 @@ pub mod batch_auction {
         auction.pool_created = false;
         auction.pool_seeded = false;
         auction.buyer_bps = snapshot_buyer_bps;
+        auction.min_wallets = snapshot_min_wallets;
+        auction.min_sol = snapshot_min_sol;
         auction.bump = ctx.bumps.auction;
 
         emit!(AuctionCreated {
@@ -391,7 +395,6 @@ pub mod batch_auction {
     /// backend crank is down.
     pub fn finalize_auction(ctx: Context<FinalizeAuction>) -> Result<()> {
         let auction = &ctx.accounts.auction;
-        let config = &ctx.accounts.config;
         let clock = Clock::get()?;
 
         require!(
@@ -405,8 +408,11 @@ pub mod batch_auction {
 
         let auction = &mut ctx.accounts.auction;
 
-        if auction.participant_count >= config.min_wallets
-            && auction.total_sol >= config.min_sol
+        // Use the snapshotted min_wallets/min_sol values from auction creation,
+        // NOT the live config values. This prevents admin from retroactively
+        // manipulating success/failure of in-flight auctions.
+        if auction.participant_count >= auction.min_wallets
+            && auction.total_sol >= auction.min_sol
         {
             auction.state = AuctionState::Succeeded;
             // Uniform price per token paid by batch buyers:
@@ -781,6 +787,11 @@ pub struct Auction {
     /// per-auction means admin changes to the global split don't retroactively
     /// change what buyers receive from live auctions.
     pub buyer_bps: u16,
+    /// Snapshot of config.min_wallets at auction creation so admin cannot
+    /// retroactively raise/lower thresholds to manipulate live auction outcomes.
+    pub min_wallets: u32,
+    /// Snapshot of config.min_sol at auction creation (same rationale).
+    pub min_sol: u64,
     pub bump: u8,
 }
 
@@ -788,9 +799,9 @@ impl Auction {
     // discriminator(8) + creator(32) + mint(32) + string prefix(4) + max_ticker(10)
     // + start(8) + end(8) + total_sol(8) + total_supply(8) + count(4)
     // + state(1) + uniform_price(8) + pool_id(32) + pool_created(1)
-    // + pool_seeded(1) + buyer_bps(2) + bump(1)
+    // + pool_seeded(1) + buyer_bps(2) + min_wallets(4) + min_sol(8) + bump(1)
     pub const LEN: usize =
-        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 4 + 1 + 8 + 32 + 1 + 1 + 2 + 1;
+        8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8 + 4 + 1 + 8 + 32 + 1 + 1 + 2 + 4 + 8 + 1;
 }
 
 #[account]

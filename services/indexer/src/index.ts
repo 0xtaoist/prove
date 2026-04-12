@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import rateLimit, { type Options as RateLimitOptions } from "express-rate-limit";
 import apiRouter from "./api";
 import { startListener, stopListener } from "./listener";
@@ -25,7 +26,9 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, etc.)
+app.use(helmet());
+app.use(express.json({ limit: "10kb" }));
 
 // Health check (exempt from rate limiting)
 app.get("/health", (_req, res) => {

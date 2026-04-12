@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { prisma } from "./db";
 import { initializeQuestsForAuction } from "./quest-init";
 import { serializeBigInts, isValidSolanaAddress, errorResponse } from "@prove/common";
@@ -9,8 +9,31 @@ function json(res: Response, data: unknown, status = 200): void {
   res.status(status).json(serializeBigInts(data));
 }
 
-// POST /api/quests/init - Initialize quests for a new auction
-router.post("/api/quests/init", async (req: Request, res: Response) => {
+/**
+ * Guard for internal service-to-service calls. Requires INTERNAL_API_KEY
+ * env var to be set and matching the X-Internal-Key header. In dev mode
+ * with explicit DISABLE_AUTH=true, the check is skipped.
+ */
+function requireInternalAuth(req: Request, res: Response, next: NextFunction): void {
+  const expected = process.env.INTERNAL_API_KEY;
+  if (!expected) {
+    if (process.env.DISABLE_AUTH === "true" && process.env.NODE_ENV !== "production") {
+      next();
+      return;
+    }
+    res.status(503).json(errorResponse("Internal API key not configured"));
+    return;
+  }
+  const provided = req.headers["x-internal-key"];
+  if (provided !== expected) {
+    res.status(401).json(errorResponse("Invalid or missing internal API key"));
+    return;
+  }
+  next();
+}
+
+// POST /api/quests/init - Initialize quests for a new auction (internal only)
+router.post("/api/quests/init", requireInternalAuth, async (req: Request, res: Response) => {
   try {
     const { mint, ticker } = req.body;
 

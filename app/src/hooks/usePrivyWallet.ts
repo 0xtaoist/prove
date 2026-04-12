@@ -14,7 +14,7 @@ import { useMemo } from "react";
  * Privy registers its wallets against.
  */
 export function usePrivyWallet() {
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, user, getAccessToken } = usePrivy();
   const { wallets } = useSolanaWallets();
 
   const address = useMemo(() => {
@@ -36,5 +36,6 @@ export function usePrivyWallet() {
     login,
     logout,
     privyUserId: user?.id ?? null,
+    getAccessToken,
   };
 }
