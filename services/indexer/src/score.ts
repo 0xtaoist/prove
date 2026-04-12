@@ -24,13 +24,20 @@ async function calculateAllScores(): Promise<void> {
     // Gather all wallets that have any on-chain activity
     const wallets = await getActiveWallets();
     let updated = 0;
+    const BATCH_SIZE = 500;
 
-    for (const wallet of wallets) {
-      try {
-        await calculateWalletScore(wallet);
-        updated++;
-      } catch (err) {
-        console.error(`[score] Failed to calculate score for ${wallet}:`, err);
+    for (let i = 0; i < wallets.length; i += BATCH_SIZE) {
+      const batch = wallets.slice(i, i + BATCH_SIZE);
+      for (const wallet of batch) {
+        try {
+          await calculateWalletScore(wallet);
+          updated++;
+        } catch (err) {
+          console.error(`[score] Failed to calculate score for ${wallet}:`, err);
+        }
+      }
+      if (i + BATCH_SIZE < wallets.length) {
+        console.log(`[score] Progress: ${Math.min(i + BATCH_SIZE, wallets.length)}/${wallets.length} wallets`);
       }
     }
 

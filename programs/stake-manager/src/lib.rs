@@ -620,8 +620,8 @@ pub struct StakeVault {
 }
 
 impl StakeVault {
-    /// 8 (discriminator) + 6*32 + 5*8 + 8 + 1 + 1 = 250
-    pub const SIZE: usize = 8 + (6 * 32) + (5 * 8) + 8 + 1 + 1;
+    /// 8 (discriminator) + 6*32(192) + 4*u64(32) + i64(8) + bool(1) + u8(1) = 242
+    pub const SIZE: usize = 8 + (6 * 32) + (4 * 8) + 8 + 1 + 1;
 }
 
 #[account]

@@ -313,8 +313,13 @@ router.post("/api/creators", requirePrivyAuth, async (req: AuthenticatedRequest,
 
     // Validate email format + length
     if (body.email != null) {
-      if (typeof body.email !== "string" || body.email.length > 254 || body.email.length === 0) {
-        res.status(400).json(errorResponse("email must be 1-254 characters"));
+      if (
+        typeof body.email !== "string" ||
+        body.email.length > 254 ||
+        body.email.length === 0 ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)
+      ) {
+        res.status(400).json(errorResponse("Invalid email address"));
         return;
       }
     }

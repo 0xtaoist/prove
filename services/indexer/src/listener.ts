@@ -377,17 +377,7 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
         });
         console.log(`[listener] Milestone passed — stake returned: ${data.mint}`);
       } else {
-        const pool = await prisma.forfeitPool.findFirst();
-        if (pool) {
-          await prisma.forfeitPool.update({
-            where: { id: pool.id },
-            data: { totalForfeited: { increment: BigInt(data.amount) } },
-          });
-        } else {
-          await prisma.forfeitPool.create({
-            data: { totalForfeited: BigInt(data.amount) },
-          });
-        }
+        await incrementForfeitPool(BigInt(data.amount));
         console.log(`[listener] Milestone failed — stake forfeited: ${data.mint}`);
       }
     } else if (log.includes("StakeForfeited")) {
@@ -403,17 +393,7 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
         },
       });
 
-      const pool = await prisma.forfeitPool.findFirst();
-      if (pool) {
-        await prisma.forfeitPool.update({
-          where: { id: pool.id },
-          data: { totalForfeited: { increment: BigInt(data.amount) } },
-        });
-      } else {
-        await prisma.forfeitPool.create({
-          data: { totalForfeited: BigInt(data.amount) },
-        });
-      }
+      await incrementForfeitPool(BigInt(data.amount));
       console.log(`[listener] Stake forfeited (auction failed): ${data.mint}`);
     } else if (log.includes("StakeEmergencyWithdrawn")) {
       const data = parseEventData(log);
@@ -459,6 +439,23 @@ function parseEventData(log: string): Record<string, string> | null {
   }
 
   return null;
+}
+
+/** Atomically increment the singleton ForfeitPool row, creating it if absent. */
+async function incrementForfeitPool(amount: bigint): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const pool = await tx.forfeitPool.findFirst();
+    if (pool) {
+      await tx.forfeitPool.update({
+        where: { id: pool.id },
+        data: { totalForfeited: { increment: amount } },
+      });
+    } else {
+      await tx.forfeitPool.create({
+        data: { totalForfeited: amount },
+      });
+    }
+  });
 }
 
 export function stopListener(): void {
