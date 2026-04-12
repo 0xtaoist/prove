@@ -48,7 +48,6 @@ export function Providers({ children }: { children: ReactNode }) {
 
   if (!privyAppId) {
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
       console.warn(
         "[providers] NEXT_PUBLIC_PRIVY_APP_ID is not set; Privy login disabled.",
       );

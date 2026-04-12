@@ -4,8 +4,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Reveal,
-  StaggerGroup,
-  StaggerItem,
   AnimatedNumber,
   staggerContainer,
   staggerItem,

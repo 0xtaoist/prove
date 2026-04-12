@@ -54,7 +54,7 @@ function encodeU64(value: number | bigint): Buffer {
 // Helper: encode a boolean as 1 byte
 // ---------------------------------------------------------------------------
 
-function encodeBool(value: boolean): Buffer {
+function _encodeBool(value: boolean): Buffer {
   return Buffer.from([value ? 1 : 0]);
 }
 

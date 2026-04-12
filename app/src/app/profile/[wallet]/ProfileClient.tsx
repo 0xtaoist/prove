@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
+import { Reveal } from "@/components/motion";
 import { ProveScoreRing } from "@/components/ProveScoreRing";
 
 function shortenAddress(addr: string): string {

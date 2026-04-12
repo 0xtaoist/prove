@@ -1,6 +1,4 @@
-import { AuctionRow } from "@/components/AuctionRow";
 import type { AuctionRowProps } from "@/components/AuctionRow";
-import { TokenRow } from "@/components/TokenRow";
 import type { TokenRowProps } from "@/components/TokenRow";
 import { DiscoverClient } from "./DiscoverClient";
 

@@ -10,7 +10,7 @@ export default tseslint.config(
       // Allow explicit any in pragmatic cases (Prisma result types, etc.)
       "@typescript-eslint/no-explicit-any": "warn",
       // Allow unused vars prefixed with _
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
 );

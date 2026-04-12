@@ -32,7 +32,7 @@ export function AuctionRow({
   participants,
   solCommitted,
   minWallets,
-  minSol,
+  minSol: _minSol,
 }: AuctionRowProps) {
   const [remaining, setRemaining] = useState(endTime - Date.now());
 
