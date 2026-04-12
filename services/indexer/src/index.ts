@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
+import rateLimit, { type Options as RateLimitOptions } from "express-rate-limit";
 import apiRouter from "./api";
 import { startListener, stopListener } from "./listener";
 import { startScoreCalculator } from "./score";
@@ -8,6 +8,7 @@ import { startFeeCollector } from "./fee-collector";
 import { startSwapIndexer, stopSwapIndexer } from "./swap-indexer";
 import { prisma } from "./db";
 import { assertProtocolConfig } from "./protocol-config";
+import { createRateLimitStore } from "./rate-limit-store";
 
 const app = express();
 const PORT = parseInt(process.env.INDEXER_PORT || process.env.PORT || "4000", 10);
@@ -31,13 +32,19 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Rate limiting
+// Rate limiting — uses Redis when REDIS_URL is set (distributed across
+// Railway replicas), otherwise falls back to in-memory.
+const storeOpts: Partial<RateLimitOptions> = {};
+const store = createRateLimitStore();
+if (store) storeOpts.store = store;
+
 const readLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests — try again shortly" },
+  ...storeOpts,
 });
 const writeLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -45,6 +52,7 @@ const writeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many write requests — try again shortly" },
+  ...storeOpts,
 });
 app.use("/api", (req, _res, next) => {
   if (req.method === "POST") return writeLimiter(req, _res, next);

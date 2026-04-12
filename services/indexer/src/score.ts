@@ -71,13 +71,22 @@ async function calculateWalletScore(wallet: string): Promise<void> {
     where: { wallet, balance: { gt: 0 } },
   });
 
+  // Batch-fetch all auctions for held mints to avoid N+1 queries
+  const heldMintsList = holdings.map((h) => h.mint);
+  const auctions = heldMintsList.length > 0
+    ? await prisma.auction.findMany({
+        where: { mint: { in: heldMintsList } },
+        select: { mint: true, state: true },
+      })
+    : [];
+  const auctionStateByMint = new Map(auctions.map((a) => [a.mint, a.state]));
+
   let totalHoldTimeHours = 0;
   for (const h of holdings) {
     const holdMs = now.getTime() - h.firstSeen.getTime();
     const holdHours = holdMs / HOUR_MS;
     // Weight by whether the auction's token is still trading
-    const auction = await prisma.auction.findUnique({ where: { mint: h.mint } });
-    const weight = auction?.state === "TRADING" ? 1.0 : 0.5;
+    const weight = auctionStateByMint.get(h.mint) === "TRADING" ? 1.0 : 0.5;
     totalHoldTimeHours += holdHours * weight;
   }
 

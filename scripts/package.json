@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@prove/indexer": "workspace:*",
-    "@coral-xyz/anchor": "^0.30.0",
+    "@coral-xyz/anchor": "^0.32.1",
     "@prisma/client": "^6.0.0",
-    "@raydium-io/raydium-sdk-v2": "^0.2.39-alpha",
+    "@raydium-io/raydium-sdk-v2": "0.2.39-alpha",
     "@solana/web3.js": "^1.95.0",
     "bn.js": "^5.2.1",
     "decimal.js": "^10.4.3"

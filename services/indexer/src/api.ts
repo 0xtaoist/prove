@@ -97,10 +97,20 @@ router.get("/api/feed", async (req: Request, res: Response) => {
     const offset = Math.max(0, Math.min(parseInt(req.query.offset as string) || 0, 10_000));
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+    // Only load auctions that have had recent swap activity (DB-level filter).
+    // This avoids loading every TRADING auction into memory when most are stale.
+    const recentMints = await prisma.swap.findMany({
+      where: { timestamp: { gte: cutoff } },
+      select: { auctionMint: true },
+      distinct: ["auctionMint"],
+    });
+    const mintSet = new Set(recentMints.map((s) => s.auctionMint));
+
     const auctions = await prisma.auction.findMany({
       where: {
         state: "TRADING",
         participantCount: { gt: 20 },
+        mint: { in: Array.from(mintSet) },
       },
       include: {
         quests: { where: { completed: true }, select: { id: true } },
@@ -113,10 +123,11 @@ router.get("/api/feed", async (req: Request, res: Response) => {
 
     const ranked = entries
       .filter((t): t is FeedEntry => t !== null)
-      .sort((a, b) => b.rank - a.rank)
-      .slice(offset, offset + limit);
+      .sort((a, b) => b.rank - a.rank);
 
-    json(res, { tokens: ranked, total: ranked.length });
+    const page = ranked.slice(offset, offset + limit);
+
+    json(res, { tokens: page, total: ranked.length });
   } catch (err) {
     console.error("[api] GET /api/feed error:", err);
     res.status(500).json(errorResponse("Internal server error"));
