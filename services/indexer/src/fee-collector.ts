@@ -261,13 +261,20 @@ async function collectFeesForPool(
 // ---------------------------------------------------------------------------
 
 function loadCrankKeypair(): Keypair {
-  const walletPath =
-    process.env.ANCHOR_WALLET ||
-    path.join(process.env.HOME || "~", ".config", "solana", "id.json");
-  if (!fs.existsSync(walletPath)) {
-    throw new Error(`Crank keypair file not found at ${walletPath}`);
+  const walletPath = process.env.ANCHOR_WALLET;
+  if (!walletPath) {
+    throw new Error(
+      "ANCHOR_WALLET env var is required — set it to the absolute path of the crank keypair JSON file",
+    );
   }
-  const raw = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
+  // Expand ~ to $HOME if present
+  const resolved = walletPath.startsWith("~/")
+    ? path.join(process.env.HOME ?? "", walletPath.slice(2))
+    : walletPath;
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Crank keypair file not found at ${resolved}`);
+  }
+  const raw = JSON.parse(fs.readFileSync(resolved, "utf-8"));
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 

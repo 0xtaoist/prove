@@ -1302,3 +1302,225 @@ pub enum BatchAuctionError {
     #[msg("Pool must be seeded before set_pool_id")]
     PoolNotSeeded,
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests — pure-logic validation (no Solana runtime required)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Account size calculations ────────────────────────────────
+    // These ensure the on-chain SIZE constants match the actual struct
+    // layout. A mismatch means Anchor init would allocate wrong space,
+    // causing deserialization panics or wasted rent.
+
+    #[test]
+    fn auction_config_size() {
+        // discriminator(8) + 4*pubkey(128) + min_wallets(4) + min_sol(8)
+        // + auction_duration(8) + buyer_bps(2) + emergency_paused(1)
+        let expected = 8 + (4 * 32) + 4 + 8 + 8 + 2 + 1;
+        assert_eq!(AuctionConfig::LEN, expected, "AuctionConfig::LEN mismatch");
+    }
+
+    #[test]
+    fn auction_size() {
+        // discriminator(8) + creator(32) + mint(32) + string prefix(4) +
+        // max_ticker(10) + start(8) + end(8) + total_sol(8) +
+        // total_supply(8) + count(4) + state(1) + uniform_price(8) +
+        // pool_id(32) + pool_created(1) + pool_seeded(1) + buyer_bps(2) +
+        // min_wallets(4) + min_sol(8) + bump(1)
+        let expected = 8 + 32 + 32 + (4 + MAX_TICKER_LEN) + 8 + 8 + 8 + 8
+            + 4 + 1 + 8 + 32 + 1 + 1 + 2 + 4 + 8 + 1;
+        assert_eq!(Auction::LEN, expected, "Auction::LEN mismatch");
+    }
+
+    #[test]
+    fn commitment_size() {
+        // discriminator(8) + wallet(32) + auction(32) + sol_amount(8) +
+        // tokens_claimed(1) + bump(1)
+        let expected = 8 + 32 + 32 + 8 + 1 + 1;
+        assert_eq!(Commitment::LEN, expected, "Commitment::LEN mismatch");
+    }
+
+    // ── BPS / tokenomics math ────────────────────────────────────
+
+    #[test]
+    fn default_bps_within_bounds() {
+        assert!(
+            DEFAULT_BUYER_BPS >= BUYER_BPS_FLOOR,
+            "default buyer bps below floor"
+        );
+        assert!(
+            DEFAULT_BUYER_BPS <= BUYER_BPS_CEILING,
+            "default buyer bps above ceiling"
+        );
+    }
+
+    #[test]
+    fn pool_share_complement() {
+        // buyer_bps + pool_bps must sum to 10_000
+        let pool_bps = BPS_DENOMINATOR - DEFAULT_BUYER_BPS;
+        assert_eq!(
+            DEFAULT_BUYER_BPS + pool_bps,
+            BPS_DENOMINATOR,
+            "buyer + pool bps must equal 10_000"
+        );
+    }
+
+    // ── Uniform price calculation ────────────────────────────────
+
+    fn compute_uniform_price(total_sol: u64, total_supply: u64, buyer_bps: u16) -> u64 {
+        let buyer_pool_tokens = (total_supply as u128)
+            .checked_mul(buyer_bps as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap();
+        if buyer_pool_tokens > 0 {
+            ((total_sol as u128)
+                .checked_div(buyer_pool_tokens)
+                .unwrap()) as u64
+        } else {
+            0
+        }
+    }
+
+    #[test]
+    fn uniform_price_normal_case() {
+        // 100 SOL committed, 1_000_000_000 supply, 65% buyer share
+        // buyer_tokens = 1B * 6500 / 10000 = 650_000_000
+        // price = 100_000_000_000 / 650_000_000 = 153 lamports/token
+        let price = compute_uniform_price(100_000_000_000, 1_000_000_000, 6500);
+        assert_eq!(price, 153);
+    }
+
+    #[test]
+    fn uniform_price_minimum_auction() {
+        // 10 SOL minimum, 1B supply, 65% buyer
+        let price = compute_uniform_price(10_000_000_000, 1_000_000_000, 6500);
+        assert_eq!(price, 15);
+    }
+
+    #[test]
+    fn uniform_price_large_supply() {
+        // Edge: very large supply can produce price=0 (truncation).
+        // 10 SOL, 1 trillion tokens, 65% buyer
+        let price = compute_uniform_price(10_000_000_000, 1_000_000_000_000, 6500);
+        // buyer_tokens = 650B, price = 10B / 650B = 0 (integer truncation)
+        assert_eq!(price, 0);
+    }
+
+    #[test]
+    fn uniform_price_does_not_overflow() {
+        // Max realistic: u64::MAX lamports (~18.4B SOL), max supply
+        let price = compute_uniform_price(u64::MAX, u64::MAX, 6500);
+        // buyer_tokens = u64::MAX * 6500 / 10000 ≈ 0.65 * u64::MAX
+        // price = u64::MAX / (0.65 * u64::MAX) ≈ 1 (truncated)
+        assert!(price <= 2, "price should be ~1 at equal amounts: {}", price);
+    }
+
+    // ── Token claim math ─────────────────────────────────────────
+
+    fn compute_tokens_owed(
+        sol_committed: u64,
+        total_sol: u64,
+        total_supply: u64,
+        buyer_bps: u16,
+    ) -> u64 {
+        let buyer_pool_tokens = (total_supply as u128)
+            .checked_mul(buyer_bps as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap();
+        (sol_committed as u128)
+            .checked_mul(buyer_pool_tokens)
+            .unwrap()
+            .checked_div(total_sol as u128)
+            .unwrap() as u64
+    }
+
+    #[test]
+    fn claim_proportional_share() {
+        // 1 SOL out of 100 SOL total, 1B supply, 65% buyer
+        let tokens = compute_tokens_owed(1_000_000_000, 100_000_000_000, 1_000_000_000, 6500);
+        // buyer_pool = 650M, share = 1/100 * 650M = 6_500_000
+        assert_eq!(tokens, 6_500_000);
+    }
+
+    #[test]
+    fn claim_full_pot() {
+        // Only participant (100% of SOL)
+        let tokens = compute_tokens_owed(
+            100_000_000_000,
+            100_000_000_000,
+            1_000_000_000,
+            6500,
+        );
+        assert_eq!(tokens, 650_000_000);
+    }
+
+    #[test]
+    fn claim_all_buyers_sum_to_buyer_pool() {
+        // 5 participants with different amounts, total = 10 SOL
+        let total_sol: u64 = 10_000_000_000;
+        let supply: u64 = 1_000_000_000;
+        let bps: u16 = 6500;
+        let amounts: Vec<u64> = vec![
+            3_000_000_000,
+            2_500_000_000,
+            2_000_000_000,
+            1_500_000_000,
+            1_000_000_000,
+        ];
+        let sum_claimed: u64 = amounts
+            .iter()
+            .map(|a| compute_tokens_owed(*a, total_sol, supply, bps))
+            .sum();
+        let buyer_pool = (supply as u128) * (bps as u128) / (BPS_DENOMINATOR as u128);
+        // Integer truncation means sum_claimed <= buyer_pool (rounding dust stays in vault)
+        assert!(
+            sum_claimed <= buyer_pool as u64,
+            "claimed {} > buyer_pool {}",
+            sum_claimed,
+            buyer_pool
+        );
+        // But the dust should be tiny (< participant_count tokens)
+        let dust = buyer_pool as u64 - sum_claimed;
+        assert!(
+            dust < amounts.len() as u64,
+            "rounding dust {} too large",
+            dust
+        );
+    }
+
+    // ── Pool seeding math ────────────────────────────────────────
+
+    #[test]
+    fn pool_tokens_complement_of_buyer() {
+        let buyer_bps: u16 = 6500;
+        let supply: u64 = 1_000_000_000;
+        let pool_bps = BPS_DENOMINATOR.checked_sub(buyer_bps).unwrap();
+        let pool_tokens = (supply as u128)
+            .checked_mul(pool_bps as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap() as u64;
+        let buyer_tokens = (supply as u128)
+            .checked_mul(buyer_bps as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap() as u64;
+        assert_eq!(pool_tokens + buyer_tokens, supply);
+    }
+
+    // ── Constant validation ──────────────────────────────────────
+
+    #[test]
+    fn defaults_are_sane() {
+        assert_eq!(DEFAULT_MIN_WALLETS, 50);
+        assert_eq!(DEFAULT_MIN_SOL, 10_000_000_000); // 10 SOL
+        assert_eq!(DEFAULT_AUCTION_DURATION, 300); // 5 min
+        assert!(MAX_TICKER_LEN >= 3 && MAX_TICKER_LEN <= 32);
+    }
+}
