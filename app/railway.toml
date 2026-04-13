@@ -4,7 +4,7 @@ buildCommand = "pnpm --filter @prove/common build && pnpm --filter @prove/app bu
 watchPatterns = ["app/**", "packages/common/**"]
 
 [deploy]
-startCommand = "cd app && pnpm start"
+startCommand = "export DATABASE_URL=\"${DATABASE_URL:-postgresql://placeholder:5432/placeholder}\" && cd app && pnpm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
