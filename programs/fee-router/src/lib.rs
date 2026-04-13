@@ -852,3 +852,171 @@ pub enum FeeRouterError {
     #[msg("Treasury address cannot be the default/zero pubkey")]
     InvalidTreasury,
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests — pure-logic validation (no Solana runtime required)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Account size calculations ────────────────────────────────
+
+    #[test]
+    fn fee_vault_size() {
+        // 8 (discriminator) + 6*pubkey(192) + 2*u16(4) + bool(1) + u8(1) = 206
+        let expected = 8 + (6 * 32) + 4 + 1 + 1;
+        assert_eq!(FeeVault::SIZE, expected, "FeeVault::SIZE mismatch");
+        assert_eq!(FeeVault::SIZE, 206);
+    }
+
+    #[test]
+    fn pool_fee_account_size() {
+        // 8 (discriminator) + 5*pubkey(160) + 3*u64(24) + i64(8) + u8(1) = 201
+        let expected = 8 + (5 * 32) + 24 + 8 + 1;
+        assert_eq!(
+            PoolFeeAccount::SIZE,
+            expected,
+            "PoolFeeAccount::SIZE mismatch"
+        );
+        assert_eq!(PoolFeeAccount::SIZE, 201);
+    }
+
+    // ── BPS constants ────────────────────────────────────────────
+
+    #[test]
+    fn default_split_sums_to_denominator() {
+        assert_eq!(
+            DEFAULT_CREATOR_BPS + DEFAULT_PROTOCOL_BPS,
+            BPS_DENOMINATOR,
+            "default split must sum to 10_000"
+        );
+    }
+
+    #[test]
+    fn default_split_is_80_20() {
+        assert_eq!(DEFAULT_CREATOR_BPS, 8_000);
+        assert_eq!(DEFAULT_PROTOCOL_BPS, 2_000);
+    }
+
+    #[test]
+    fn creator_floor_enforced() {
+        assert_eq!(CREATOR_BPS_FLOOR, 5_000);
+        assert!(
+            DEFAULT_CREATOR_BPS >= CREATOR_BPS_FLOOR,
+            "default creator share below floor"
+        );
+    }
+
+    // ── Fee split math ───────────────────────────────────────────
+
+    fn compute_split(total: u64, creator_bps: u16) -> (u64, u64) {
+        let to_creator = (total as u128)
+            .checked_mul(creator_bps as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap() as u64;
+        let to_protocol = total.checked_sub(to_creator).unwrap();
+        (to_creator, to_protocol)
+    }
+
+    #[test]
+    fn split_80_20_normal() {
+        let (creator, protocol) = compute_split(1_000_000_000, 8_000);
+        assert_eq!(creator, 800_000_000);
+        assert_eq!(protocol, 200_000_000);
+        assert_eq!(creator + protocol, 1_000_000_000);
+    }
+
+    #[test]
+    fn split_80_20_small_amount() {
+        // 100 lamports
+        let (creator, protocol) = compute_split(100, 8_000);
+        assert_eq!(creator, 80);
+        assert_eq!(protocol, 20);
+    }
+
+    #[test]
+    fn split_80_20_single_lamport() {
+        // 1 lamport — integer truncation means creator gets 0
+        let (creator, protocol) = compute_split(1, 8_000);
+        assert_eq!(creator, 0);
+        assert_eq!(protocol, 1);
+    }
+
+    #[test]
+    fn split_conserves_total() {
+        // Test across a range of amounts
+        for total in [
+            1u64,
+            7,
+            99,
+            1_000,
+            999_999,
+            1_000_000_000,
+            u64::MAX / 10_000,
+        ] {
+            let (creator, protocol) = compute_split(total, 8_000);
+            assert_eq!(
+                creator + protocol,
+                total,
+                "split not conserved for total={}",
+                total
+            );
+        }
+    }
+
+    #[test]
+    fn split_at_floor() {
+        // 50/50 split (creator at minimum floor)
+        let (creator, protocol) = compute_split(1_000_000, 5_000);
+        assert_eq!(creator, 500_000);
+        assert_eq!(protocol, 500_000);
+    }
+
+    #[test]
+    fn split_no_overflow_large_amount() {
+        // u128 intermediate prevents overflow even at large amounts
+        let total = u64::MAX / 2;
+        let (creator, protocol) = compute_split(total, 8_000);
+        assert_eq!(creator + protocol, total);
+    }
+
+    // ── Update_split validation logic ────────────────────────────
+
+    #[test]
+    fn valid_splits() {
+        // These should all pass the update_split validation
+        let valid = vec![
+            (8000u16, 2000u16),
+            (5000, 5000),
+            (9000, 1000),
+            (7500, 2500),
+        ];
+        for (c, p) in valid {
+            assert_eq!(
+                c.checked_add(p).unwrap(),
+                BPS_DENOMINATOR,
+                "invalid test case: {} + {} != 10000",
+                c,
+                p
+            );
+            assert!(c >= CREATOR_BPS_FLOOR, "creator {} below floor", c);
+        }
+    }
+
+    #[test]
+    fn invalid_split_below_floor() {
+        // 49/51 — creator below 50% floor
+        let creator_bps: u16 = 4_999;
+        assert!(creator_bps < CREATOR_BPS_FLOOR);
+    }
+
+    #[test]
+    fn invalid_split_wrong_sum() {
+        // 80/30 — doesn't sum to 10_000
+        let sum = 8_000u16.checked_add(3_000u16).unwrap();
+        assert_ne!(sum, BPS_DENOMINATOR);
+    }
+}

@@ -660,7 +660,7 @@ impl Stake {
     pub const SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum StakeState {
     Escrowed,
     Returned,
@@ -766,4 +766,159 @@ pub enum StakeError {
     AlreadyWithdrawn,
     #[msg("Withdrawal would push the vault below its rent-exempt floor")]
     RentFloorViolated,
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests — pure-logic validation (no Solana runtime required)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Account size calculations ────────────────────────────────
+
+    #[test]
+    fn stake_vault_size() {
+        // 8 (discriminator) + 6*32(192) + 4*u64(32) + i64(8) + bool(1) + u8(1) = 242
+        let expected = 8 + (6 * 32) + (4 * 8) + 8 + 1 + 1;
+        assert_eq!(StakeVault::SIZE, expected, "StakeVault::SIZE mismatch");
+        assert_eq!(StakeVault::SIZE, 242);
+    }
+
+    #[test]
+    fn stake_size() {
+        // 8 (discriminator) + 32 + 32 + 8 + 8 + 8 + 1 + 1 = 98
+        let expected = 8 + 32 + 32 + 8 + 8 + 8 + 1 + 1;
+        assert_eq!(Stake::SIZE, expected, "Stake::SIZE mismatch");
+        assert_eq!(Stake::SIZE, 98);
+    }
+
+    // ── Constant validation ──────────────────────────────────────
+
+    #[test]
+    fn stake_amount_is_2_sol() {
+        assert_eq!(STAKE_AMOUNT, 2_000_000_000);
+    }
+
+    #[test]
+    fn milestone_window_is_72_hours() {
+        assert_eq!(MILESTONE_WINDOW, 72 * 60 * 60);
+        assert_eq!(MILESTONE_WINDOW, 259_200);
+    }
+
+    // ── State enum coverage ──────────────────────────────────────
+
+    #[test]
+    fn stake_states_are_distinct() {
+        assert_ne!(StakeState::Escrowed, StakeState::Returned);
+        assert_ne!(StakeState::Escrowed, StakeState::Forfeited);
+        assert_ne!(StakeState::Escrowed, StakeState::EmergencyWithdrawn);
+        assert_ne!(StakeState::Returned, StakeState::Forfeited);
+        assert_ne!(StakeState::Returned, StakeState::EmergencyWithdrawn);
+        assert_ne!(StakeState::Forfeited, StakeState::EmergencyWithdrawn);
+    }
+
+    // ── Accounting invariants ────────────────────────────────────
+
+    #[test]
+    fn milestone_pass_accounting() {
+        // Simulate: deposit → evaluate(passed)
+        let mut total_escrowed: u64 = 0;
+        let mut total_returned: u64 = 0;
+        let mut total_survivor: u64 = 0;
+
+        // Deposit
+        total_escrowed = total_escrowed.checked_add(STAKE_AMOUNT).unwrap();
+        assert_eq!(total_escrowed, STAKE_AMOUNT);
+
+        // Evaluate: passed
+        total_returned = total_returned.checked_add(STAKE_AMOUNT).unwrap();
+        total_escrowed = total_escrowed.checked_sub(STAKE_AMOUNT).unwrap();
+
+        assert_eq!(total_escrowed, 0);
+        assert_eq!(total_returned, STAKE_AMOUNT);
+        assert_eq!(total_survivor, 0);
+    }
+
+    #[test]
+    fn milestone_fail_accounting() {
+        let mut total_escrowed: u64 = 0;
+        let mut total_survivor: u64 = 0;
+
+        // Deposit
+        total_escrowed = total_escrowed.checked_add(STAKE_AMOUNT).unwrap();
+
+        // Evaluate: failed → forfeit to survivor pool
+        total_survivor = total_survivor.checked_add(STAKE_AMOUNT).unwrap();
+        total_escrowed = total_escrowed.checked_sub(STAKE_AMOUNT).unwrap();
+
+        assert_eq!(total_escrowed, 0);
+        assert_eq!(total_survivor, STAKE_AMOUNT);
+    }
+
+    #[test]
+    fn forfeit_for_failed_auction_accounting() {
+        let mut total_escrowed: u64 = 0;
+        let mut total_survivor: u64 = 0;
+
+        // Deposit
+        total_escrowed = total_escrowed.checked_add(STAKE_AMOUNT).unwrap();
+
+        // Forfeit (auction failed, no milestone wait)
+        total_survivor = total_survivor.checked_add(STAKE_AMOUNT).unwrap();
+        total_escrowed = total_escrowed.checked_sub(STAKE_AMOUNT).unwrap();
+
+        assert_eq!(total_escrowed, 0);
+        assert_eq!(total_survivor, STAKE_AMOUNT);
+    }
+
+    #[test]
+    fn multiple_stakes_accounting() {
+        // 10 stakes deposited, 6 pass milestone, 4 fail
+        let n = 10u64;
+        let pass = 6u64;
+        let fail = n - pass;
+
+        let mut total_escrowed = n * STAKE_AMOUNT;
+        let mut total_returned: u64 = 0;
+        let mut total_survivor: u64 = 0;
+
+        for _ in 0..pass {
+            total_returned += STAKE_AMOUNT;
+            total_escrowed -= STAKE_AMOUNT;
+        }
+        for _ in 0..fail {
+            total_survivor += STAKE_AMOUNT;
+            total_escrowed -= STAKE_AMOUNT;
+        }
+
+        assert_eq!(total_escrowed, 0);
+        assert_eq!(total_returned, pass * STAKE_AMOUNT);
+        assert_eq!(total_survivor, fail * STAKE_AMOUNT);
+        assert_eq!(
+            total_returned + total_survivor,
+            n * STAKE_AMOUNT,
+            "conservation: returned + survivor = total deposited"
+        );
+    }
+
+    // ── Overflow safety ──────────────────────────────────────────
+
+    #[test]
+    fn milestone_deadline_no_overflow() {
+        // Even at i64::MAX - MILESTONE_WINDOW, the addition should succeed
+        let created_at: i64 = i64::MAX - MILESTONE_WINDOW;
+        let deadline = created_at.checked_add(MILESTONE_WINDOW);
+        assert!(deadline.is_some());
+        assert_eq!(deadline.unwrap(), i64::MAX);
+    }
+
+    #[test]
+    fn milestone_deadline_overflow_detected() {
+        // At i64::MAX, adding MILESTONE_WINDOW overflows
+        let created_at: i64 = i64::MAX;
+        let deadline = created_at.checked_add(MILESTONE_WINDOW);
+        assert!(deadline.is_none(), "should overflow");
+    }
 }

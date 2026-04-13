@@ -237,6 +237,24 @@ async function onAuctionFinalized(log: string): Promise<void> {
   // On-chain emits a single AuctionFinalized event with succeeded: bool.
   const data = parseEventData(log, ["mint", "succeeded", "participant_count"]);
   if (!data) return;
+
+  // Idempotency: only transition from GATHERING. If the auction is already
+  // SUCCEEDED/FAILED/TRADING, this is a duplicate event — skip it.
+  const auction = await prisma.auction.findUnique({
+    where: { mint: data.mint },
+    select: { state: true },
+  });
+  if (!auction) {
+    console.warn(`[listener] AuctionFinalized for unknown mint ${data.mint}, skipping`);
+    return;
+  }
+  if (auction.state !== "GATHERING") {
+    console.warn(
+      `[listener] AuctionFinalized for ${data.mint} but state is already ${auction.state}, skipping duplicate`,
+    );
+    return;
+  }
+
   const succeeded = data.succeeded === "true" || data.succeeded === "1";
   await prisma.auction.update({
     where: { mint: data.mint },
@@ -287,6 +305,30 @@ async function onPoolSeeded(log: string): Promise<void> {
 async function onPoolIdSet(log: string): Promise<void> {
   const data = parseEventData(log);
   if (!data) return;
+
+  // Idempotency: only transition from SUCCEEDED. If the auction is already
+  // TRADING this is a duplicate event. Other states would be invalid.
+  const auction = await prisma.auction.findUnique({
+    where: { mint: data.mint },
+    select: { state: true },
+  });
+  if (!auction) {
+    console.warn(`[listener] PoolIdSet for unknown mint ${data.mint}, skipping`);
+    return;
+  }
+  if (auction.state === "TRADING") {
+    console.warn(
+      `[listener] PoolIdSet for ${data.mint} but already TRADING, skipping duplicate`,
+    );
+    return;
+  }
+  if (auction.state !== "SUCCEEDED") {
+    console.error(
+      `[listener] PoolIdSet for ${data.mint} in unexpected state ${auction.state}, skipping`,
+    );
+    return;
+  }
+
   await prisma.auction.update({
     where: { mint: data.mint },
     data: {
@@ -456,40 +498,89 @@ function parseEventData(
 ): Record<string, string> | null {
   // Expected format from Anchor emit!():
   //   "EventName { key: value, key2: value2 }"
-  // We extract the first { ... } block and coerce it into valid JSON.
+  // We extract the first { ... } block and parse it into a key-value map.
+  //
+  // Instead of regex-based JSON coercion (brittle with pubkeys and colons),
+  // we use a simple tokenizer that splits on top-level commas and then
+  // separates key: value at the FIRST colon only.
   try {
-    const jsonMatch = log.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const raw = jsonMatch[0];
-      const jsonStr = raw
-        .replace(/(\w+)\s*:/g, '"$1":')
-        .replace(/:\s*([^",}\s][^,}]*)/g, (_, val) => {
-          const trimmed = val.trim();
-          if (/^".*"$/.test(trimmed) || /^-?\d+(\.\d+)?$/.test(trimmed)) {
-            return `: ${trimmed}`;
-          }
-          return `: "${trimmed}"`;
-        });
+    const braceStart = log.indexOf("{");
+    const braceEnd = log.lastIndexOf("}");
+    if (braceStart === -1 || braceEnd === -1 || braceEnd <= braceStart) {
+      return null;
+    }
 
-      const parsed = JSON.parse(jsonStr) as Record<string, string>;
+    const inner = log.slice(braceStart + 1, braceEnd).trim();
+    if (!inner) return null;
 
-      // Validate that expected fields exist so we don't act on mismatched data
-      if (requiredFields) {
-        for (const f of requiredFields) {
-          if (parsed[f] === undefined) {
-            console.warn(`[listener] parseEventData: missing required field '${f}'`);
-            return null;
-          }
+    const result: Record<string, string> = {};
+
+    // Split on commas that are not inside nested braces (for safety).
+    // Our events are flat key-value pairs so a simple split suffices.
+    let depth = 0;
+    let current = "";
+    for (const ch of inner) {
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+      else if (ch === "," && depth === 0) {
+        parseKeyValue(current.trim(), result);
+        current = "";
+        continue;
+      }
+      current += ch;
+    }
+    if (current.trim()) {
+      parseKeyValue(current.trim(), result);
+    }
+
+    if (Object.keys(result).length === 0) {
+      console.warn("[listener] parseEventData: parsed zero fields from log", {
+        log: log.slice(0, 200),
+      });
+      return null;
+    }
+
+    // Validate that expected fields exist so we don't act on mismatched data
+    if (requiredFields) {
+      for (const f of requiredFields) {
+        if (result[f] === undefined) {
+          console.warn(
+            `[listener] parseEventData: missing required field '${f}'`,
+            { fields: Object.keys(result), log: log.slice(0, 200) },
+          );
+          return null;
         }
       }
-
-      return parsed;
     }
-  } catch {
-    // parse failed
+
+    return result;
+  } catch (err) {
+    console.error("[listener] parseEventData: unexpected parse error", {
+      err,
+      log: log.slice(0, 200),
+    });
   }
 
   return null;
+}
+
+/** Parse a single "key: value" pair, splitting at the FIRST colon only
+ *  so base58 pubkeys and other colon-containing values are preserved. */
+function parseKeyValue(
+  pair: string,
+  out: Record<string, string>,
+): void {
+  const colonIdx = pair.indexOf(":");
+  if (colonIdx === -1) return;
+  const key = pair.slice(0, colonIdx).trim();
+  let value = pair.slice(colonIdx + 1).trim();
+  // Strip surrounding quotes if present
+  if (value.startsWith('"') && value.endsWith('"')) {
+    value = value.slice(1, -1);
+  }
+  if (key) {
+    out[key] = value;
+  }
 }
 
 /** Atomically increment the singleton ForfeitPool row, creating it if absent. */

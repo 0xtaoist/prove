@@ -182,9 +182,7 @@ async function indexSwap(
 ): Promise<boolean> {
   if (!connection) return false;
 
-  // Idempotency guard. The unique constraint on `signature` is the
-  // source of truth; this check just avoids the RPC round-trip when
-  // the row already exists.
+  // Quick check to skip the RPC round-trip when we already have this swap.
   const existing = await prisma.swap.findUnique({ where: { signature } });
   if (existing) return false;
 
@@ -254,27 +252,27 @@ async function indexSwap(
     (totalFee * BigInt(CREATOR_FEE_BPS)) / BigInt(TOTAL_FEE_BPS);
   const protocolFee = totalFee - creatorFee;
 
-  try {
-    await prisma.swap.create({
-      data: {
-        auctionMint,
-        wallet: walletStr,
-        isBuy,
-        solAmount,
-        tokenAmount,
-        creatorFee,
-        protocolFee,
-        price,
-        signature,
-        timestamp: new Date(tx.blockTime * 1000),
-      },
-    });
-    return true;
-  } catch (err: unknown) {
-    // P2002 = unique constraint violation. Another worker won the
-    // race; safe to ignore.
-    const code = (err as { code?: string })?.code;
-    if (code === "P2002") return false;
-    throw err;
-  }
+  // Upsert: the unique constraint on `signature` is the source of truth.
+  // If another worker inserted first, the update is a harmless no-op
+  // (all values are identical). No more TOCTOU race.
+  const row = await prisma.swap.upsert({
+    where: { signature },
+    create: {
+      auctionMint,
+      wallet: walletStr,
+      isBuy,
+      solAmount,
+      tokenAmount,
+      creatorFee,
+      protocolFee,
+      price,
+      signature,
+      timestamp: new Date(tx.blockTime * 1000),
+    },
+    update: {},
+  });
+  // `createdAt` only exists on newly created rows in some Prisma versions.
+  // We treat any upsert that didn't throw as success; the findUnique
+  // guard at the top handles the common "already indexed" case.
+  return row != null;
 }
