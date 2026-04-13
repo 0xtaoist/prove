@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import {
   Reveal,
   AnimatedNumber,
+  StaggerGroup,
+  StaggerItem,
   staggerContainer,
   staggerItem,
 } from "@/components/motion";
