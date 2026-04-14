@@ -5,37 +5,17 @@ import { Connection, PublicKey } from "@solana/web3.js";
 // surface immediately instead of producing silent on-chain errors.
 // ---------------------------------------------------------------------------
 
-// Placeholder used during Next.js static generation (SSG) when env vars
-// aren't available. The real IDs are only needed at runtime when the user
-// signs transactions — SSG pages never call into Solana.
-const SSG_PLACEHOLDER = "11111111111111111111111111111111";
-
-function requireProgramId(envVar: string): PublicKey {
-  const raw = process.env[envVar];
-  if (!raw) {
-    // During `next build` SSG, env vars may not be set. Return a
-    // placeholder so the build succeeds — the value is never used
-    // at build time (only client-side transaction builders call it).
-    if (typeof window === "undefined" && process.env.NEXT_PHASE === "phase-production-build") {
-      return new PublicKey(SSG_PLACEHOLDER);
-    }
-    throw new Error(
-      `Missing required env var ${envVar}. Set it in .env or .env.local.`,
-    );
-  }
-  return new PublicKey(raw);
-}
-
-export const BATCH_AUCTION_PROGRAM_ID = requireProgramId(
-  "NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID",
+// Mainnet program IDs. Env vars override if set (for dev/testing).
+export const BATCH_AUCTION_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_BATCH_AUCTION_PROGRAM_ID || "D92hy2gaPK8uzTvfncRBsu2RXHZP7ZEsjRbynvc2tBdD",
 );
 
-export const STAKE_MANAGER_PROGRAM_ID = requireProgramId(
-  "NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID",
+export const STAKE_MANAGER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_STAKE_MANAGER_PROGRAM_ID || "3MWbnFSuwGpxRgGaYgtRRABmC8HDjdmZctjf5JZm5faE",
 );
 
-export const FEE_ROUTER_PROGRAM_ID = requireProgramId(
-  "NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID",
+export const FEE_ROUTER_PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_FEE_ROUTER_PROGRAM_ID || "6RMoCadvfUsKCYMsTNUKv9vXk6MfrVHRkB7iZ6Kd6gck",
 );
 
 // Raydium CLMM for concentrated liquidity pool creation
