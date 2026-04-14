@@ -10,8 +10,8 @@ export const TOTAL_FEE_BPS = 10_000;
 
 // Batch auction defaults
 export const MIN_WALLETS = 50;
-export const MIN_SOL_LAMPORTS = 10_000_000_000; // 10 SOL
-export const AUCTION_DURATION_SECS = 300; // 5 minutes
+export const MIN_SOL_LAMPORTS = 50_000_000_000; // 50 SOL
+export const AUCTION_DURATION_SECS = 900; // 15 minutes
 export const COOLDOWN_SECS = 30;
 
 // Token supply split between buyers and the Raydium CLMM pool.

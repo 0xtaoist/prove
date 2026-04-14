@@ -57,6 +57,58 @@ pub mod batch_auction {
         Ok(())
     }
 
+    /// One-time migration: reallocate config account to new size and
+    /// backfill new fields. Uses raw account access since the old
+    /// account is too small to deserialize as AuctionConfig.
+    pub fn migrate_config(ctx: Context<MigrateConfig>) -> Result<()> {
+        let config_info = &ctx.accounts.config;
+        let data = config_info.try_borrow_data()?;
+        let current_len = data.len();
+        let target_len = AuctionConfig::LEN;
+
+        if current_len >= target_len {
+            msg!("Config already at target size, skipping");
+            return Ok(());
+        }
+
+        // Read authority from old layout: 8-byte discriminator + 32-byte authority
+        let authority = Pubkey::try_from(&data[8..40])
+            .map_err(|_| error!(BatchAuctionError::InvalidConfigValue))?;
+        require!(
+            authority == ctx.accounts.authority.key(),
+            BatchAuctionError::Unauthorized
+        );
+
+        // Read old fields after authority (old layout: disc(8) + authority(32) + min_wallets(4) + min_sol(8) + auction_duration(8) + buyer_bps(2) + paused(1))
+        let min_wallets = u32::from_le_bytes(data[40..44].try_into().unwrap());
+        let min_sol = u64::from_le_bytes(data[44..52].try_into().unwrap());
+        let auction_duration = i64::from_le_bytes(data[52..60].try_into().unwrap());
+        let buyer_bps = u16::from_le_bytes(data[60..62].try_into().unwrap());
+        let paused = data[62] != 0;
+        drop(data);
+
+        // Realloc
+        config_info.realloc(target_len, false)?;
+
+        // Write new layout
+        let mut data = config_info.try_borrow_mut_data()?;
+        // Keep discriminator (first 8 bytes unchanged)
+        // New layout: disc(8) + authority(32) + pending_authority(32) + crank_authority(32) + pending_crank_authority(32) + min_wallets(4) + min_sol(8) + auction_duration(8) + buyer_bps(2) + paused(1)
+        let mut offset = 8;
+        data[offset..offset + 32].copy_from_slice(&authority.to_bytes()); offset += 32;
+        data[offset..offset + 32].copy_from_slice(&Pubkey::default().to_bytes()); offset += 32; // pending_authority
+        data[offset..offset + 32].copy_from_slice(&authority.to_bytes()); offset += 32; // crank_authority = authority initially
+        data[offset..offset + 32].copy_from_slice(&Pubkey::default().to_bytes()); offset += 32; // pending_crank_authority
+        data[offset..offset + 4].copy_from_slice(&min_wallets.to_le_bytes()); offset += 4;
+        data[offset..offset + 8].copy_from_slice(&min_sol.to_le_bytes()); offset += 8;
+        data[offset..offset + 8].copy_from_slice(&auction_duration.to_le_bytes()); offset += 8;
+        data[offset..offset + 2].copy_from_slice(&buyer_bps.to_le_bytes()); offset += 2;
+        data[offset] = if paused { 1 } else { 0 };
+
+        msg!("Config migrated from {} to {} bytes", current_len, target_len);
+        Ok(())
+    }
+
     // -----------------------------------------------------------------
     // Config updates (upgradability)
     // -----------------------------------------------------------------
@@ -832,6 +884,22 @@ pub struct InitializeConfig<'info> {
         bump,
     )]
     pub config: Account<'info, AuctionConfig>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateConfig<'info> {
+    /// CHECK: Raw account — deserialization happens manually inside the instruction.
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump,
+    )]
+    pub config: AccountInfo<'info>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
