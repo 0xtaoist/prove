@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("BAuc111111111111111111111111111111111111111");
+declare_id!("D92hy2gaPK8uzTvfncRBsu2RXHZP7ZEsjRbynvc2tBdD");
 
 // ---------------------------------------------------------------------------
 // Constants

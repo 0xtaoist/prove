@@ -12,6 +12,11 @@ batch_auction = "BAuc111111111111111111111111111111111111111"
 fee_router = "FeeR111111111111111111111111111111111111111"
 stake_manager = "Stak111111111111111111111111111111111111111"
 
+[programs.mainnet]
+batch_auction = "D92hy2gaPK8uzTvfncRBsu2RXHZP7ZEsjRbynvc2tBdD"
+fee_router = "6RMoCadvfUsKCYMsTNUKv9vXk6MfrVHRkB7iZ6Kd6gck"
+stake_manager = "3MWbnFSuwGpxRgGaYgtRRABmC8HDjdmZctjf5JZm5faE"
+
 [registry]
 url = "https://api.apr.dev"
 

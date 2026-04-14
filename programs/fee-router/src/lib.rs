@@ -34,7 +34,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 //    crank-owned NFT). In practice the admin pauses, rotates the crank,
 //    and the new crank moves the NFT to `recovery_destination`.
 
-declare_id!("FeeR111111111111111111111111111111111111111");
+declare_id!("6RMoCadvfUsKCYMsTNUKv9vXk6MfrVHRkB7iZ6Kd6gck");
 
 // Real basis-point denominator. 10_000 bps = 100%.
 const BPS_DENOMINATOR: u16 = 10_000;

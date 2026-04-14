@@ -24,7 +24,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const endpoint =
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
-    "https://api.devnet.solana.com";
+    "https://api.mainnet-beta.solana.com";
 
   const wallets = useMemo(
     () => [

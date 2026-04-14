@@ -53,7 +53,7 @@ export function getConnection(): Connection {
   if (!_connection) {
     const rpcUrl =
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
-      "https://api.devnet.solana.com";
+      "https://api.mainnet-beta.solana.com";
     _connection = new Connection(rpcUrl, "confirmed");
   }
   return _connection;

@@ -30,6 +30,7 @@ test-ledger/
 **/id.json
 *.key
 *.secret
+keys/
 
 # Logs
 *.log

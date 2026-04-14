@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_spl::token::Mint;
 
-declare_id!("Stak111111111111111111111111111111111111111");
+declare_id!("3MWbnFSuwGpxRgGaYgtRRABmC8HDjdmZctjf5JZm5faE");
 
 // ---------------------------------------------------------------------------
 // Constants
