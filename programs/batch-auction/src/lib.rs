@@ -942,13 +942,13 @@ pub struct CreateAuction<'info> {
         seeds = [b"auction", mint.key().as_ref()],
         bump,
     )]
-    pub auction: Account<'info, Auction>,
+    pub auction: Box<Account<'info, Auction>>,
 
     #[account(
         seeds = [b"config"],
         bump,
     )]
-    pub config: Account<'info, AuctionConfig>,
+    pub config: Box<Account<'info, AuctionConfig>>,
 
     /// SPL token mint for this auction. Auction PDA must be the mint authority.
     #[account(
@@ -956,7 +956,7 @@ pub struct CreateAuction<'info> {
         constraint = mint.mint_authority.map_or(false, |a| a == auction.key()) @ BatchAuctionError::InvalidMintAuthority,
         constraint = mint.supply == 0 @ BatchAuctionError::MintAlreadyHasSupply,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         init,
@@ -966,7 +966,7 @@ pub struct CreateAuction<'info> {
         seeds = [b"vault", mint.key().as_ref()],
         bump,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub creator: Signer<'info>,
