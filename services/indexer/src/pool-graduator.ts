@@ -44,15 +44,11 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xW
 const graduating = new Set<string>();
 
 export function startPoolGraduator(): NodeJS.Timeout | null {
-  const rpcUrl = process.env.SOLANA_RPC_URL;
-  if (!rpcUrl) {
-    console.warn("[pool-graduator] SOLANA_RPC_URL not set — pool graduation disabled");
-    return null;
-  }
-
-  console.log("[pool-graduator] Starting Meteora DLMM pool graduation loop (every 30s)");
-  void graduateEligible();
-  return setInterval(() => void graduateEligible(), POLL_INTERVAL_MS);
+  // DISABLED: Auto-graduation is disabled until pool creation is reliable.
+  // Pool creation + liquidity must be done manually after auction succeeds.
+  // The seed_pool → create_pool pipeline risks stranding funds if pool creation fails.
+  console.log("[pool-graduator] Auto-graduation DISABLED — use manual pool creation");
+  return null;
 }
 
 async function graduateEligible(): Promise<void> {
