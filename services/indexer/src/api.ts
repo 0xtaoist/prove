@@ -439,28 +439,38 @@ router.post("/api/metadata/upload", requirePrivyAuth, async (req: AuthenticatedR
       return;
     }
 
-    // Upsert: the auction may not exist yet (created on-chain after this call)
-    // Store metadata so the listener can pick it up, or the metadata endpoint can serve it
-    await prisma.auction.upsert({
-      where: { mint },
-      create: {
-        mint,
-        ticker: name.toUpperCase().slice(0, 10),
-        creator: req.privyUserId ?? "unknown",
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 900_000),
-        totalSupply: BigInt(0),
-        tokenName: name,
-        tokenImage: image ?? null,
-        description: description ?? null,
-        state: "GATHERING",
-      },
-      update: {
-        tokenName: name,
-        tokenImage: image ?? undefined,
-        description: description ?? undefined,
-      },
-    });
+    // Store metadata. The auction may not exist yet (created on-chain after
+    // this call). Try to update if it exists, otherwise store in a lightweight
+    // metadata cache that the listener will merge when the auction is created.
+    const existing = await prisma.auction.findUnique({ where: { mint } });
+    if (existing) {
+      await prisma.auction.update({
+        where: { mint },
+        data: {
+          tokenName: name,
+          tokenImage: image ?? undefined,
+          description: description ?? undefined,
+        },
+      });
+    } else {
+      // Store metadata in a temporary key-value style using a raw query
+      // so we don't violate FK constraints. The listener will merge this
+      // when the AuctionCreated event arrives.
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "TokenMetadataCache" (
+          "mint" TEXT PRIMARY KEY,
+          "name" TEXT,
+          "image" TEXT,
+          "description" TEXT,
+          "createdAt" TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "TokenMetadataCache" ("mint", "name", "image", "description")
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT ("mint") DO UPDATE SET "name" = $2, "image" = $3, "description" = $4
+      `, mint, name, image ?? null, description ?? null);
+    }
 
     const baseUrl = process.env.APP_ORIGIN ?? `http://localhost:${process.env.INDEXER_PORT ?? 4000}`;
     const metadataUri = `${baseUrl.replace('https://proveit.fun', 'https://proveindexer-production.up.railway.app')}/api/metadata/${mint}.json`;
@@ -483,25 +493,45 @@ router.get("/api/metadata/:mintJson", async (req: Request, res: Response) => {
       return;
     }
 
-    const auction = await prisma.auction.findUnique({
+    let tokenData: { ticker?: string; tokenName?: string | null; tokenImage?: string | null; description?: string | null } | null;
+
+    // Try auction table first, then metadata cache
+    tokenData = await prisma.auction.findUnique({
       where: { mint },
       select: { ticker: true, tokenName: true, tokenImage: true, description: true },
     });
 
-    if (!auction) {
+    if (!tokenData) {
+      // Check cache table
+      try {
+        const cached = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT "name", "image", "description" FROM "TokenMetadataCache" WHERE "mint" = $1`, mint,
+        );
+        if (cached?.[0]) {
+          tokenData = {
+            ticker: cached[0].name?.toUpperCase()?.slice(0, 10),
+            tokenName: cached[0].name,
+            tokenImage: cached[0].image,
+            description: cached[0].description,
+          };
+        }
+      } catch { /* cache table may not exist yet */ }
+    }
+
+    if (!tokenData) {
       res.status(404).json(errorResponse("Token not found"));
       return;
     }
 
-    const baseUrl = process.env.APP_ORIGIN ?? `http://localhost:${process.env.INDEXER_PORT ?? 4000}`;
-    const imageUrl = auction.tokenImage
-      ? `${baseUrl.replace('https://proveit.fun', 'https://proveindexer-production.up.railway.app')}/api/metadata/${mint}/image`
+    const indexerUrl = "https://proveindexer-production.up.railway.app";
+    const imageUrl = tokenData.tokenImage
+      ? `${indexerUrl}/api/metadata/${mint}/image`
       : null;
 
     const metadata = {
-      name: auction.tokenName ?? auction.ticker,
-      symbol: auction.ticker,
-      description: auction.description ?? `${auction.ticker} — launched on Prove`,
+      name: tokenData.tokenName ?? tokenData.ticker ?? mint.slice(0, 8),
+      symbol: tokenData.ticker ?? "",
+      description: tokenData.description ?? `${tokenData.ticker ?? "Token"} — launched on Prove`,
       image: imageUrl,
       external_url: `https://proveit.fun/token/${mint}`,
       attributes: [],
@@ -530,22 +560,34 @@ router.get("/api/metadata/:mint/image", async (req: Request, res: Response) => {
       return;
     }
 
+    let imageData: string | null = null;
+
     const auction = await prisma.auction.findUnique({
       where: { mint },
       select: { tokenImage: true },
     });
+    imageData = auction?.tokenImage ?? null;
 
-    if (!auction?.tokenImage) {
+    if (!imageData) {
+      // Check cache
+      try {
+        const cached = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT "image" FROM "TokenMetadataCache" WHERE "mint" = $1`, mint,
+        );
+        imageData = cached?.[0]?.image ?? null;
+      } catch { /* cache table may not exist */ }
+    }
+
+    if (!imageData) {
       res.status(404).json(errorResponse("Image not found"));
       return;
     }
 
     // Parse data URI: "data:image/png;base64,iVBOR..."
-    const match = auction.tokenImage.match(/^data:([^;]+);base64,(.+)$/);
+    const match = imageData.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) {
-      // If it's a URL, redirect
-      if (auction.tokenImage.startsWith("http")) {
-        res.redirect(auction.tokenImage);
+      if (imageData.startsWith("http")) {
+        res.redirect(imageData);
         return;
       }
       res.status(400).json(errorResponse("Invalid image format"));
