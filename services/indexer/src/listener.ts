@@ -1,11 +1,6 @@
-import { Connection, PublicKey, Logs } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { prisma } from "./db";
 
-// Program IDs are sourced from the env so deploys can rotate them
-// without a code change. Missing or invalid vars cause the listener
-// to skip startup — subscribing to placeholder IDs would silently
-// index zero events, which is strictly worse than a loud "off"
-// state. TickerRegistry is off-chain (archived) so it's not listed.
 type ProgramName = "BatchAuction" | "FeeRouter" | "StakeManager";
 
 const PROGRAM_ENV_VARS: Record<ProgramName, string> = {
@@ -38,14 +33,16 @@ function resolveProgramIds():
   return { ok: true, programs };
 }
 
-// Reconnection config
-const BASE_DELAY_MS = 1_000;
-const MAX_DELAY_MS = 60_000;
-const BACKOFF_FACTOR = 2;
+// Polling config
+const POLL_INTERVAL_MS = 5_000; // 5 seconds
+const lastSignatures: Record<ProgramName, string | undefined> = {
+  BatchAuction: undefined,
+  FeeRouter: undefined,
+  StakeManager: undefined,
+};
 
-// Subscription tracking for cleanup
-const subscriptions: number[] = [];
 let connection: Connection;
+let pollTimers: NodeJS.Timeout[] = [];
 
 export function startListener(): void {
   const rpcUrl = process.env.SOLANA_RPC_URL;
@@ -63,73 +60,73 @@ export function startListener(): void {
   }
 
   connection = new Connection(rpcUrl, "confirmed");
-  console.log("[listener] Connecting to Solana RPC...");
+  console.log("[listener] Starting poll-based listener (every 5s)...");
 
   for (const [name, programId] of Object.entries(resolved.programs) as [
     ProgramName,
     PublicKey,
   ][]) {
-    subscribeWithReconnect(name, programId);
+    // Run immediately, then poll
+    void pollProgram(name, programId);
+    const timer = setInterval(
+      () => void pollProgram(name, programId),
+      POLL_INTERVAL_MS,
+    );
+    pollTimers.push(timer);
   }
 }
 
-function subscribeWithReconnect(name: ProgramName, programId: PublicKey): void {
-  let delay = BASE_DELAY_MS;
+async function pollProgram(name: ProgramName, programId: PublicKey): Promise<void> {
+  try {
+    const sigs = await connection.getSignaturesForAddress(
+      programId,
+      {
+        limit: 10,
+        until: lastSignatures[name],
+      },
+      "confirmed",
+    );
 
-  function subscribe(): void {
-    console.log(`[listener] Subscribing to ${name} (${programId.toBase58()})`);
+    if (sigs.length === 0) return;
 
-    try {
-      const subId = connection.onLogs(
-        programId,
-        (logs: Logs) => {
-          delay = BASE_DELAY_MS;
-          handleLogs(name, logs).catch((err) => {
-            console.error(`[listener] Error handling ${name} logs:`, err);
-          });
-        },
-        "confirmed"
-      );
+    // Process oldest first
+    const sorted = sigs.reverse();
 
-      subscriptions.push(subId);
-    } catch (err) {
-      console.error(`[listener] Failed to subscribe to ${name}:`, err);
-      reconnect();
+    // Update the cursor to the newest signature
+    lastSignatures[name] = sorted[sorted.length - 1].signature;
+
+    for (const sigInfo of sorted) {
+      if (sigInfo.err) continue; // Skip failed txs
+
+      try {
+        const tx = await connection.getTransaction(sigInfo.signature, {
+          commitment: "confirmed",
+          maxSupportedTransactionVersion: 0,
+        });
+        if (!tx?.meta?.logMessages) continue;
+
+        for (const log of tx.meta.logMessages) {
+          if (!log.startsWith("Program log:") && !log.startsWith("Program data:")) continue;
+          const message = log.replace(/^Program (log|data): /, "");
+
+          switch (name) {
+            case "BatchAuction":
+              await handleBatchAuctionEvent(message, sigInfo.signature);
+              break;
+            case "FeeRouter":
+              await handleFeeRouterEvent(message, sigInfo.signature);
+              break;
+            case "StakeManager":
+              await handleStakeManagerEvent(message, sigInfo.signature);
+              break;
+          }
+        }
+      } catch (err) {
+        console.error(`[listener] Error processing tx ${sigInfo.signature}:`, err);
+      }
     }
-  }
-
-  function reconnect(): void {
-    console.log(`[listener] Reconnecting ${name} in ${delay}ms...`);
-    setTimeout(() => {
-      subscribe();
-      delay = Math.min(delay * BACKOFF_FACTOR, MAX_DELAY_MS);
-    }, delay);
-  }
-
-  subscribe();
-}
-
-async function handleLogs(program: ProgramName, logs: Logs): Promise<void> {
-  const { signature, err, logs: logMessages } = logs;
-
-  if (err) return;
-
-  for (const log of logMessages) {
-    if (!log.startsWith("Program log:") && !log.startsWith("Program data:")) continue;
-
-    const message = log.replace(/^Program (log|data): /, "");
-
-    switch (program) {
-      case "BatchAuction":
-        await handleBatchAuctionEvent(message, signature);
-        break;
-      case "FeeRouter":
-        await handleFeeRouterEvent(message, signature);
-        break;
-      case "StakeManager":
-        await handleStakeManagerEvent(message, signature);
-        break;
-    }
+  } catch (err) {
+    console.error(`[listener] Poll error for ${name}:`, err);
   }
 }
 
@@ -164,8 +161,6 @@ async function onAuctionCreated(log: string, signature: string): Promise<void> {
     console.error("[listener] AuctionCreated missing creator, refusing to index", { signature });
     return;
   }
-  // Creator row MUST exist before the Auction row can be inserted
-  // (enforced by FK). Upsert is idempotent with the launch-flow POST.
   await prisma.creator.upsert({
     where: { wallet: data.creator },
     create: { wallet: data.creator },
@@ -196,10 +191,6 @@ async function onSolCommitted(log: string): Promise<void> {
   const data = parseEventData(log, ["mint", "participant", "amount"]);
   if (!data) return;
 
-  // Use a transaction to atomically create-or-update the commitment and
-  // only increment participantCount when the commitment is genuinely new.
-  // This prevents double-counting if the same event is delivered twice
-  // (e.g. WebSocket reconnection, duplicate log delivery).
   await prisma.$transaction(async (tx) => {
     const existing = await tx.commitment.findUnique({
       where: {
@@ -208,8 +199,6 @@ async function onSolCommitted(log: string): Promise<void> {
     });
 
     if (existing) {
-      // Duplicate event — commitment PDA is init-only on-chain so the
-      // same wallet can never commit twice. Skip to avoid inflating totals.
       console.warn(`[listener] Duplicate SolCommitted for ${data.participant} on ${data.mint}, skipping`);
       return;
     }
@@ -234,12 +223,9 @@ async function onSolCommitted(log: string): Promise<void> {
 }
 
 async function onAuctionFinalized(log: string): Promise<void> {
-  // On-chain emits a single AuctionFinalized event with succeeded: bool.
   const data = parseEventData(log, ["mint", "succeeded", "participant_count"]);
   if (!data) return;
 
-  // Idempotency: only transition from GATHERING. If the auction is already
-  // SUCCEEDED/FAILED/TRADING, this is a duplicate event — skip it.
   const auction = await prisma.auction.findUnique({
     where: { mint: data.mint },
     select: { state: true },
@@ -306,8 +292,6 @@ async function onPoolIdSet(log: string): Promise<void> {
   const data = parseEventData(log);
   if (!data) return;
 
-  // Idempotency: only transition from SUCCEEDED. If the auction is already
-  // TRADING this is a duplicate event. Other states would be invalid.
   const auction = await prisma.auction.findUnique({
     where: { mint: data.mint },
     select: { state: true },
@@ -343,9 +327,6 @@ async function onCommitmentEmergencyRefunded(log: string): Promise<void> {
   const data = parseEventData(log, ["mint", "participant", "amount"]);
   if (!data) return;
 
-  // Persist the refund: mark the commitment as claimed (prevents re-claim)
-  // and decrement the auction's totalSol / participantCount so off-chain
-  // state stays consistent with on-chain after emergency refunds.
   await prisma.$transaction(async (tx) => {
     await tx.commitment.updateMany({
       where: {
@@ -373,11 +354,9 @@ async function onCommitmentEmergencyRefunded(log: string): Promise<void> {
 async function handleFeeRouterEvent(log: string, _signature: string): Promise<void> {
   try {
     if (log.includes("FeesClaimed")) {
-      // On-chain event: FeesClaimed { mint, total, to_creator, to_protocol }
       const data = parseEventData(log);
       if (!data) return;
 
-      // Look up the creator from the auction row
       const auction = await prisma.auction.findUnique({
         where: { mint: data.mint },
         select: { creator: true },
@@ -435,7 +414,6 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
       });
       console.log(`[listener] Stake deposited: ${data.creator} for ${data.mint}`);
     } else if (log.includes("MilestoneEvaluated")) {
-      // On-chain event: MilestoneEvaluated { mint, creator, passed, amount }
       const data = parseEventData(log);
       if (!data) return;
       const passed = data.passed === "true" || data.passed === "1";
@@ -459,7 +437,6 @@ async function handleStakeManagerEvent(log: string, _signature: string): Promise
         console.log(`[listener] Milestone failed — stake forfeited: ${data.mint}`);
       }
     } else if (log.includes("StakeForfeited")) {
-      // Emitted by forfeit_stake_for_failed_auction
       const data = parseEventData(log);
       if (!data) return;
 
@@ -496,13 +473,6 @@ function parseEventData(
   log: string,
   requiredFields?: string[],
 ): Record<string, string> | null {
-  // Expected format from Anchor emit!():
-  //   "EventName { key: value, key2: value2 }"
-  // We extract the first { ... } block and parse it into a key-value map.
-  //
-  // Instead of regex-based JSON coercion (brittle with pubkeys and colons),
-  // we use a simple tokenizer that splits on top-level commas and then
-  // separates key: value at the FIRST colon only.
   try {
     const braceStart = log.indexOf("{");
     const braceEnd = log.lastIndexOf("}");
@@ -515,8 +485,6 @@ function parseEventData(
 
     const result: Record<string, string> = {};
 
-    // Split on commas that are not inside nested braces (for safety).
-    // Our events are flat key-value pairs so a simple split suffices.
     let depth = 0;
     let current = "";
     for (const ch of inner) {
@@ -534,13 +502,9 @@ function parseEventData(
     }
 
     if (Object.keys(result).length === 0) {
-      console.warn("[listener] parseEventData: parsed zero fields from log", {
-        log: log.slice(0, 200),
-      });
       return null;
     }
 
-    // Validate that expected fields exist so we don't act on mismatched data
     if (requiredFields) {
       for (const f of requiredFields) {
         if (result[f] === undefined) {
@@ -564,8 +528,6 @@ function parseEventData(
   return null;
 }
 
-/** Parse a single "key: value" pair, splitting at the FIRST colon only
- *  so base58 pubkeys and other colon-containing values are preserved. */
 function parseKeyValue(
   pair: string,
   out: Record<string, string>,
@@ -574,7 +536,6 @@ function parseKeyValue(
   if (colonIdx === -1) return;
   const key = pair.slice(0, colonIdx).trim();
   let value = pair.slice(colonIdx + 1).trim();
-  // Strip surrounding quotes if present
   if (value.startsWith('"') && value.endsWith('"')) {
     value = value.slice(1, -1);
   }
@@ -583,7 +544,6 @@ function parseKeyValue(
   }
 }
 
-/** Atomically increment the singleton ForfeitPool row, creating it if absent. */
 async function incrementForfeitPool(amount: bigint): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const pool = await tx.forfeitPool.findFirst();
@@ -601,9 +561,9 @@ async function incrementForfeitPool(amount: bigint): Promise<void> {
 }
 
 export function stopListener(): void {
-  for (const subId of subscriptions) {
-    connection?.removeOnLogsListener(subId).catch(() => {});
+  for (const timer of pollTimers) {
+    clearInterval(timer);
   }
-  subscriptions.length = 0;
-  console.log("[listener] All subscriptions removed");
+  pollTimers = [];
+  console.log("[listener] All poll timers stopped");
 }
