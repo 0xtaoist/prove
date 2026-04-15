@@ -6,6 +6,7 @@ import apiRouter from "./api";
 import { startListener, stopListener } from "./listener";
 import { startScoreCalculator } from "./score";
 import { startFeeCollector } from "./fee-collector";
+import { startPoolGraduator } from "./pool-graduator";
 import { startSwapIndexer, stopSwapIndexer } from "./swap-indexer";
 import { prisma } from "./db";
 import { assertProtocolConfig } from "./protocol-config";
@@ -87,6 +88,9 @@ const server = app.listen(PORT, async () => {
   // Start hourly score calculator
   scoreTimer = startScoreCalculator();
 
+  // Start pool graduation crank (every 30s, checks for succeeded auctions)
+  graduatorTimer = startPoolGraduator();
+
   // Start fee collection crank (every 15 minutes)
   feeTimer = startFeeCollector();
 
@@ -95,6 +99,7 @@ const server = app.listen(PORT, async () => {
 });
 
 let scoreTimer: NodeJS.Timeout | undefined;
+let graduatorTimer: NodeJS.Timeout | null | undefined;
 let feeTimer: NodeJS.Timeout | undefined;
 let swapTimer: NodeJS.Timeout | undefined;
 
@@ -109,6 +114,7 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop background tasks
   if (scoreTimer) clearInterval(scoreTimer);
+  if (graduatorTimer) clearInterval(graduatorTimer);
   if (feeTimer) clearInterval(feeTimer);
   if (swapTimer) clearInterval(swapTimer);
   stopSwapIndexer();
