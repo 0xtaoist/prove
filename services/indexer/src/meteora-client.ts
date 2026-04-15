@@ -116,7 +116,7 @@ export async function createDlmmPoolWithPosition(
     totalXAmount: tokenAmount,
     totalYAmount: solAmount,
     strategy: {
-      strategyType: StrategyType.SpotBalanced,
+      strategyType: StrategyType.Spot,
       minBinId,
       maxBinId,
     },
