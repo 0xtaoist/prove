@@ -264,11 +264,11 @@ export default function LaunchPage() {
         <button
           type="submit"
           className="btn-primary w-full py-4 text-base"
-          disabled={!connected || auctionLoading}
+          disabled={(!connected && !authenticated) || auctionLoading}
         >
           {auctionLoading
             ? "Sending Transaction..."
-            : connected
+            : connected || authenticated
               ? `Launch \u2014 Pay ${STAKE_AMOUNT} SOL Stake`
               : "Connect Wallet to Launch"}
         </button>

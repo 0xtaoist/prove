@@ -26,6 +26,8 @@ export function Providers({ children }: { children: ReactNode }) {
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
     "https://api.mainnet-beta.solana.com";
 
+  const solanaConnectors = useMemo(() => toSolanaWalletConnectors(), []);
+
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
@@ -38,23 +40,25 @@ export function Providers({ children }: { children: ReactNode }) {
 
   // Privy is the primary login surface. If PRIVY_APP_ID is not configured we
   // fall back to wallet-adapter only (dev mode), but production must set it.
-  const core = (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
-  );
-
   if (!privyAppId) {
     if (process.env.NODE_ENV !== "production") {
       console.warn(
         "[providers] NEXT_PUBLIC_PRIVY_APP_ID is not set; Privy login disabled.",
       );
     }
-    return core;
+    return (
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    );
   }
 
+  // Privy must wrap the wallet adapter so its embedded/external wallets
+  // register as wallet-adapter wallets. The solanaConnectors bridge injects
+  // Privy wallets into useWallet() so `connected` and `publicKey` work
+  // automatically after Privy login.
   return (
     <PrivyProvider
       appId={privyAppId}
@@ -67,7 +71,7 @@ export function Providers({ children }: { children: ReactNode }) {
         },
         externalWallets: {
           solana: {
-            connectors: toSolanaWalletConnectors(),
+            connectors: solanaConnectors,
           },
         },
         embeddedWallets: {
@@ -75,7 +79,11 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }}
     >
-      {core}
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
     </PrivyProvider>
   );
 }
