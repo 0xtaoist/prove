@@ -51,7 +51,7 @@ async function getActiveAuctions(): Promise<AuctionRowProps[]> {
       endTime: new Date(a.endTime).getTime(),
       participants: a.participantCount ?? a.participants ?? 0,
       solCommitted: Number(a.totalSol ?? a.sol_committed ?? 0),
-      minWallets: a.minWallets ?? a.min_wallets ?? 50,
+      minWallets: a.minWallets ?? a.min_wallets ?? 20,
       minSol: Number(a.minSol ?? a.min_sol ?? 50_000_000_000),
     }));
   } catch {

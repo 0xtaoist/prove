@@ -83,7 +83,7 @@ export default function BatchAuctionPage() {
         endsAt: new Date(data.endTime).getTime(),
         participants: data.participantCount ?? data.participants ?? 0,
         solCommitted: Number(data.totalSol ?? data.sol_committed ?? 0),
-        minWallets: data.minWallets ?? data.min_wallets ?? 50,
+        minWallets: data.minWallets ?? data.min_wallets ?? 20,
         minSol: Number(data.minSol ?? data.min_sol ?? 50_000_000_000),
       });
       setError(null);
