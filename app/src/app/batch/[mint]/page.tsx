@@ -68,20 +68,23 @@ export default function BatchAuctionPage() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/auctions/${encodeURIComponent(mint)}`);
+      const res = await fetch(`${API_BASE}/api/auction/${encodeURIComponent(mint)}`);
       if (!res.ok) throw new Error("Auction not found");
       const data = await res.json();
       setAuction({
         mint: data.mint,
         ticker: data.ticker,
-        name: data.name ?? "",
+        name: data.tokenName ?? data.name ?? "",
         description: data.description ?? "",
-        state: data.state,
-        endsAt: data.ends_at,
-        participants: data.participants,
-        solCommitted: data.sol_committed,
-        minWallets: data.min_wallets ?? 50,
-        minSol: data.min_sol ?? 50_000_000_000,
+        state: data.state === "GATHERING" ? "Gathering"
+             : data.state === "SUCCEEDED" ? "Succeeded"
+             : data.state === "FAILED" ? "Failed"
+             : data.state,
+        endsAt: new Date(data.endTime).getTime(),
+        participants: data.participantCount ?? data.participants ?? 0,
+        solCommitted: Number(data.totalSol ?? data.sol_committed ?? 0),
+        minWallets: data.minWallets ?? data.min_wallets ?? 50,
+        minSol: Number(data.minSol ?? data.min_sol ?? 50_000_000_000),
       });
       setError(null);
     } catch (e) {

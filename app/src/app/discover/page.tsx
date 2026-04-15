@@ -148,20 +148,20 @@ async function getActiveAuctions(): Promise<AuctionRowProps[]> {
     const res = await fetch(`${API_BASE}/api/auctions/active`, {
       next: { revalidate: 15 },
     });
-    if (!res.ok) return MOCK_AUCTIONS;
-    const data: AuctionResponse[] = await res.json();
-    if (data.length === 0) return MOCK_AUCTIONS;
+    if (!res.ok) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any[] = await res.json();
     return data.map((a) => ({
       mint: a.mint,
       ticker: a.ticker,
-      endTime: a.ends_at,
-      participants: a.participants,
-      solCommitted: a.sol_committed,
-      minWallets: a.min_wallets ?? 50,
-      minSol: a.min_sol ?? 50_000_000_000,
+      endTime: new Date(a.endTime).getTime(),
+      participants: a.participantCount ?? a.participants ?? 0,
+      solCommitted: Number(a.totalSol ?? a.sol_committed ?? 0),
+      minWallets: a.minWallets ?? a.min_wallets ?? 50,
+      minSol: Number(a.minSol ?? a.min_sol ?? 50_000_000_000),
     }));
   } catch {
-    return MOCK_AUCTIONS;
+    return [];
   }
 }
 
@@ -170,9 +170,9 @@ async function getFeed(): Promise<TokenRowProps[]> {
     const res = await fetch(`${API_BASE}/api/feed`, {
       next: { revalidate: 30 },
     });
-    if (!res.ok) return MOCK_TOKENS;
+    if (!res.ok) return [];
     const data: TokenResponse[] = await res.json();
-    if (data.length === 0) return MOCK_TOKENS;
+    if (data.length === 0) return [];
     return data.map((t) => ({
       mint: t.mint,
       ticker: t.ticker,
