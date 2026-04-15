@@ -8,6 +8,7 @@ import {
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -21,10 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
     "https://api.mainnet-beta.solana.com";
 
-  // Empty array — Phantom/Solflare auto-register as Standard Wallets.
-  // No Privy connectors for external wallets — this prevents Privy's
-  // iframe from proxying signing requests (which causes Phantom to show
-  // "example.com" as the origin and block the request).
+  const solanaConnectors = useMemo(() => toSolanaWalletConnectors(), []);
   const wallets = useMemo(() => [], []);
 
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -44,10 +42,6 @@ export function Providers({ children }: { children: ReactNode }) {
     );
   }
 
-  // Privy handles embedded wallets (email/social logins).
-  // External wallets (Phantom, Solflare) connect directly through
-  // wallet-adapter's Standard Wallet interface — no Privy proxy.
-  // This ensures Phantom sees proveit.fun as the origin, not example.com.
   return (
     <PrivyProvider
       appId={privyAppId}
@@ -57,6 +51,11 @@ export function Providers({ children }: { children: ReactNode }) {
           theme: "dark",
           accentColor: "#22d3ee",
           walletChainType: "solana-only",
+        },
+        externalWallets: {
+          solana: {
+            connectors: solanaConnectors,
+          },
         },
         embeddedWallets: {
           solana: { createOnLogin: "users-without-wallets" },

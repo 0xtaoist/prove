@@ -67,19 +67,13 @@ export function useTransaction(): UseTransactionReturn {
         let sig: string;
 
         if (publicKey && signTransaction) {
-          // Wallet-adapter path: sign then send raw
-          // This preserves partial signatures from extra signers
           const signed = await signTransaction(tx);
           const raw = signed.serialize();
-          sig = await connection.sendRawTransaction(raw);
-        } else if (publicKey && walletSendTx && !extraSigners?.length) {
-          // Wallet-adapter sendTransaction path (no extra signers)
-          sig = await walletSendTx(tx, connection);
+          sig = await connection.sendRawTransaction(raw, { skipPreflight: true });
         } else if (privyWallet) {
-          // Privy wallet path — use signTransaction to preserve partialSign
           const signed = await privyWallet.signTransaction(tx);
           const raw = signed.serialize();
-          sig = await connection.sendRawTransaction(raw);
+          sig = await connection.sendRawTransaction(raw, { skipPreflight: true });
         } else {
           setError("No wallet available to sign");
           setLoading(false);

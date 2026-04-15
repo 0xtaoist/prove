@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePrivyWallet } from "../hooks/usePrivyWallet";
 
 function truncate(addr: string) {
@@ -13,36 +11,7 @@ function truncate(addr: string) {
 }
 
 function LoginButton() {
-  const { ready, authenticated, address: privyAddress, login, logout } = usePrivyWallet();
-  const { publicKey, disconnect, connected } = useWallet();
-  const { setVisible } = useWalletModal();
-
-  // Wallet-adapter connected (Phantom, Solflare)
-  if (connected && publicKey) {
-    const addr = publicKey.toBase58();
-    return (
-      <button
-        className="btn-outline px-4 py-2 text-sm font-mono"
-        onClick={disconnect}
-        title={addr}
-      >
-        {truncate(addr)}
-      </button>
-    );
-  }
-
-  // Privy authenticated (email, social)
-  if (authenticated && privyAddress) {
-    return (
-      <button
-        className="btn-outline px-4 py-2 text-sm font-mono"
-        onClick={logout}
-        title={privyAddress}
-      >
-        {truncate(privyAddress)}
-      </button>
-    );
-  }
+  const { ready, authenticated, address, login, logout } = usePrivyWallet();
 
   if (!ready) {
     return (
@@ -52,21 +21,22 @@ function LoginButton() {
     );
   }
 
+  if (!authenticated) {
+    return (
+      <button className="btn-primary px-4 py-2 text-sm" onClick={login}>
+        Connect
+      </button>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <button
-        className="btn-primary px-4 py-2 text-sm"
-        onClick={() => setVisible(true)}
-      >
-        Connect Wallet
-      </button>
-      <button
-        className="btn-outline px-4 py-2 text-sm"
-        onClick={login}
-      >
-        Log in
-      </button>
-    </div>
+    <button
+      className="btn-outline px-4 py-2 text-sm font-mono"
+      onClick={logout}
+      title={address ?? undefined}
+    >
+      {address ? truncate(address) : "Log out"}
+    </button>
   );
 }
 
