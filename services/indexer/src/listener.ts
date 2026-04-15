@@ -78,22 +78,24 @@ export function startListener(): void {
 
 async function pollProgram(name: ProgramName, programId: PublicKey): Promise<void> {
   try {
+    const opts: { limit: number; until?: string } = { limit: 20 };
+    if (lastSignatures[name]) {
+      opts.until = lastSignatures[name];
+    }
+
     const sigs = await connection.getSignaturesForAddress(
       programId,
-      {
-        limit: 10,
-        until: lastSignatures[name],
-      },
+      opts,
       "confirmed",
     );
 
     if (sigs.length === 0) return;
 
-    // Process oldest first
+    // sigs come newest-first. Process oldest first.
     const sorted = sigs.reverse();
 
-    // Update the cursor to the newest signature
-    lastSignatures[name] = sorted[sorted.length - 1].signature;
+    // Update cursor to the newest we've seen
+    lastSignatures[name] = sigs[0].signature;
 
     for (const sigInfo of sorted) {
       if (sigInfo.err) continue; // Skip failed txs
