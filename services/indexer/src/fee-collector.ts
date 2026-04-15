@@ -3,15 +3,11 @@
  *
  * Every 15 minutes:
  *   1. Find all TRADING auctions with a pool id.
- *   2. For each pool: read pending SOL fees from the Meteora DLMM position.
- *   3. If fees exceed the threshold, claim them via the Meteora SDK.
- *   4. Transfer the SOL portion into the pool_fee_account PDA.
- *   5. Call `fee_router::claim_and_split` which enforces the 80/20
- *      split on-chain and sends SOL to creator + protocol treasury.
- *   6. Mirror the amounts into CreatorFee in the indexer DB.
- *
- * Only SOL fees are routed. Token-side fees accrue in the crank's ATA
- * and are logged for manual sweep.
+ *   2. For each pool: read pending fees from the Meteora DLMM position.
+ *   3. Claim fees (both SOL and token) via the Meteora SDK.
+ *   4. Route SOL fees through fee_router::claim_and_split (80/20 on-chain).
+ *   5. Transfer token fees directly to creator (80%) and protocol (20%).
+ *   6. Mirror amounts into CreatorFee in the indexer DB.
  *
  * Crank key: CRANK_KEYPAIR_JSON or ANCHOR_WALLET.
  * Fee router program id: FEE_ROUTER_PROGRAM_ID.
@@ -34,13 +30,14 @@ import BN from "bn.js";
 import { prisma } from "./db";
 import { getProtocolVaultAddress, splitFee } from "./protocol-config";
 import {
-  getPositionFees,
   claimPositionFees,
   type MeteoraContext,
 } from "./meteora-client";
 
 const CLAIM_THRESHOLD_LAMPORTS = 10_000_000; // 0.01 SOL min to claim
 const CLAIM_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 export function startFeeCollector(): NodeJS.Timeout {
   console.log("[fee-collector] Starting fee collection loop (every 15m)");
@@ -56,9 +53,7 @@ async function collectFees(): Promise<void> {
   }
   const feeRouterId = process.env.FEE_ROUTER_PROGRAM_ID;
   if (!feeRouterId) {
-    console.error(
-      "[fee-collector] FEE_ROUTER_PROGRAM_ID not set — skipping cycle",
-    );
+    console.error("[fee-collector] FEE_ROUTER_PROGRAM_ID not set — skipping cycle");
     return;
   }
 
@@ -117,13 +112,8 @@ async function collectFeesForPool(
   feeRouterProgramId: PublicKey,
 ): Promise<void> {
   const poolAddress = new PublicKey(poolId);
+  const mintPubkey = new PublicKey(mint);
 
-  // We need the position address. For now, query the DLMM pool for the
-  // crank's position. The position address was stored during graduation
-  // but the DB schema doesn't have a separate field for it — it's encoded
-  // in the on-chain PoolFeeAccount. Read it from there.
-  //
-  // Simplified approach: load the pool and find crank's positions.
   const DLMM = (await import("@meteora-ag/dlmm")).default;
   let dlmmPool;
   try {
@@ -135,7 +125,6 @@ async function collectFeesForPool(
     return;
   }
 
-  // Get all positions owned by the crank in this pool
   const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(
     crank.publicKey,
   );
@@ -147,117 +136,135 @@ async function collectFeesForPool(
     return;
   }
 
-  // Use the first position (we only create one per pool)
   const position = userPositions[0];
-  const feeSOL = position.positionData.feeY; // Y = WSOL in our pools
+  const feeSOL = position.positionData.feeY; // Y = WSOL
   const feeToken = position.positionData.feeX; // X = auctioned token
 
-  if (feeSOL.lt(new BN(CLAIM_THRESHOLD_LAMPORTS))) {
+  if (feeSOL.lt(new BN(CLAIM_THRESHOLD_LAMPORTS)) && feeToken.isZero()) {
     console.log(
-      `[fee-collector] ${ticker}: pending SOL fees ${feeSOL.toString()} below threshold (${CLAIM_THRESHOLD_LAMPORTS}) — skipping`,
+      `[fee-collector] ${ticker}: pending fees below threshold — skipping`,
     );
     return;
   }
 
   console.log(
-    `[fee-collector] ${ticker}: claiming ${feeSOL.toString()} lamports (SOL) + ${feeToken.toString()} tokens from ${poolId}`,
+    `[fee-collector] ${ticker}: claiming ${feeSOL.toString()} lamports (SOL) + ${feeToken.toString()} tokens`,
   );
 
-  // 1. Claim fees via Meteora SDK
+  // ── 1. Claim both fees via Meteora SDK ────────────────────────────────
   const claimTxIds = await claimPositionFees(ctx, poolAddress, position);
   console.log(
     `[fee-collector] ${ticker}: Meteora claim tx(s) ${claimTxIds.join(", ")}`,
   );
 
-  // 2. Transfer the SOL portion to the pool_fee_account PDA so
-  //    claim_and_split can split it on-chain.
-  const [poolFeePda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("pool_fee"), new PublicKey(mint).toBuffer()],
-    feeRouterProgramId,
-  );
-  const [feeVaultPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("fee_vault")],
-    feeRouterProgramId,
-  );
+  // ── 2. Route SOL fees through on-chain 80/20 split ────────────────────
+  if (feeSOL.gtn(0)) {
+    const [poolFeePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_fee"), mintPubkey.toBuffer()],
+      feeRouterProgramId,
+    );
+    const [feeVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("fee_vault")],
+      feeRouterProgramId,
+    );
 
-  const transferIx = SystemProgram.transfer({
-    fromPubkey: crank.publicKey,
-    toPubkey: poolFeePda,
-    lamports: BigInt(feeSOL.toString()),
-  });
+    const transferIx = SystemProgram.transfer({
+      fromPubkey: crank.publicKey,
+      toPubkey: poolFeePda,
+      lamports: BigInt(feeSOL.toString()),
+    });
 
-  // 3. Call fee_router::claim_and_split
-  const claimIx = buildClaimAndSplitIx({
-    feeRouterProgramId,
-    crank: crank.publicKey,
-    feeVault: feeVaultPda,
-    poolFeeAccount: poolFeePda,
-    creator: new PublicKey(creator),
-    protocolTreasury: new PublicKey(protocolVault),
-  });
+    const claimIx = buildClaimAndSplitIx({
+      feeRouterProgramId,
+      crank: crank.publicKey,
+      feeVault: feeVaultPda,
+      poolFeeAccount: poolFeePda,
+      creator: new PublicKey(creator),
+      protocolTreasury: new PublicKey(protocolVault),
+    });
 
-  const tx = new Transaction().add(transferIx, claimIx);
-  const splitTxId = await sendAndConfirmTransaction(connection, tx, [crank], {
-    commitment: "confirmed",
-  });
-  console.log(
-    `[fee-collector] ${ticker}: claim_and_split tx ${splitTxId}`,
-  );
-
-  // 4. Mirror the split into CreatorFee accounting.
-  const totalLamports = BigInt(feeSOL.toString());
-  const { creatorLamports, protocolLamports } = splitFee(totalLamports);
-
-  await prisma.creatorFee.upsert({
-    where: { mint_creator: { mint, creator } },
-    update: {
-      totalEarned: { increment: creatorLamports },
-    },
-    create: {
-      mint,
-      creator,
-      totalEarned: creatorLamports,
-    },
-  });
-
-  console.log(
-    `[fee-collector] ${ticker}: recorded ${creatorLamports.toString()} to creator, ${protocolLamports.toString()} to protocol`,
-  );
-
-  // Token-side fees are NOT routed — they sit in the crank's ATA.
-  if (feeToken.gtn(0)) {
+    const tx = new Transaction().add(transferIx, claimIx);
+    const splitTxId = await sendAndConfirmTransaction(connection, tx, [crank], {
+      commitment: "confirmed",
+    });
     console.log(
-      `[fee-collector] ${ticker}: ${feeToken.toString()} token-side fees sitting in crank ATA — manual sweep required`,
+      `[fee-collector] ${ticker}: SOL claim_and_split tx ${splitTxId}`,
+    );
+  }
+
+  // ── 3. Transfer token fees directly: 80% creator, 20% protocol ────────
+  if (feeToken.gtn(0)) {
+    const totalTokens = BigInt(feeToken.toString());
+    const creatorTokens = (totalTokens * 80n) / 100n;
+    const protocolTokens = totalTokens - creatorTokens;
+
+    const creatorPubkey = new PublicKey(creator);
+    const protocolPubkey = new PublicKey(protocolVault);
+
+    // Crank's token ATA (source)
+    const crankAta = getAta(mintPubkey, crank.publicKey);
+    // Creator's token ATA (destination)
+    const creatorAta = getAta(mintPubkey, creatorPubkey);
+    // Protocol's token ATA (destination)
+    const protocolAta = getAta(mintPubkey, protocolPubkey);
+
+    const tx = new Transaction();
+
+    // Ensure creator and protocol have ATAs
+    const [creatorAtaInfo, protocolAtaInfo] = await Promise.all([
+      connection.getAccountInfo(creatorAta),
+      connection.getAccountInfo(protocolAta),
+    ]);
+    if (!creatorAtaInfo) {
+      tx.add(buildCreateAtaIx(crank.publicKey, creatorAta, creatorPubkey, mintPubkey));
+    }
+    if (!protocolAtaInfo) {
+      tx.add(buildCreateAtaIx(crank.publicKey, protocolAta, protocolPubkey, mintPubkey));
+    }
+
+    // Transfer 80% to creator
+    if (creatorTokens > 0n) {
+      tx.add(buildTokenTransferIx(crankAta, creatorAta, crank.publicKey, creatorTokens));
+    }
+    // Transfer 20% to protocol
+    if (protocolTokens > 0n) {
+      tx.add(buildTokenTransferIx(crankAta, protocolAta, crank.publicKey, protocolTokens));
+    }
+
+    const tokenTxId = await sendAndConfirmTransaction(connection, tx, [crank], {
+      commitment: "confirmed",
+    });
+    console.log(
+      `[fee-collector] ${ticker}: token split tx ${tokenTxId} (creator=${creatorTokens}, protocol=${protocolTokens})`,
+    );
+  }
+
+  // ── 4. Mirror SOL split into CreatorFee accounting ────────────────────
+  if (feeSOL.gtn(0)) {
+    const totalLamports = BigInt(feeSOL.toString());
+    const { creatorLamports, protocolLamports } = splitFee(totalLamports);
+
+    await prisma.creatorFee.upsert({
+      where: { mint_creator: { mint, creator } },
+      update: {
+        totalEarned: { increment: creatorLamports },
+      },
+      create: {
+        mint,
+        creator,
+        totalEarned: creatorLamports,
+      },
+    });
+
+    console.log(
+      `[fee-collector] ${ticker}: recorded SOL ${creatorLamports.toString()} to creator, ${protocolLamports.toString()} to protocol`,
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Instruction builders
 // ---------------------------------------------------------------------------
-
-function loadCrankKeypair(): Keypair {
-  const inlineJson = process.env.CRANK_KEYPAIR_JSON;
-  if (inlineJson) {
-    const raw = JSON.parse(inlineJson);
-    return Keypair.fromSecretKey(Uint8Array.from(raw));
-  }
-
-  const walletPath = process.env.ANCHOR_WALLET;
-  if (!walletPath) {
-    throw new Error(
-      "ANCHOR_WALLET or CRANK_KEYPAIR_JSON env var is required",
-    );
-  }
-  const resolved = walletPath.startsWith("~/")
-    ? path.join(process.env.HOME ?? "", walletPath.slice(2))
-    : walletPath;
-  if (!fs.existsSync(resolved)) {
-    throw new Error(`Crank keypair file not found at ${resolved}`);
-  }
-  const raw = JSON.parse(fs.readFileSync(resolved, "utf-8"));
-  return Keypair.fromSecretKey(Uint8Array.from(raw));
-}
 
 function anchorDiscriminator(name: string): Buffer {
   return createHash("sha256").update(`global:${name}`).digest().slice(0, 8);
@@ -283,4 +290,78 @@ function buildClaimAndSplitIx(params: {
     ],
     data: anchorDiscriminator("claim_and_split"),
   });
+}
+
+/** SPL Token transfer instruction (amount as u64 LE). */
+function buildTokenTransferIx(
+  from: PublicKey,
+  to: PublicKey,
+  authority: PublicKey,
+  amount: bigint,
+): TransactionInstruction {
+  const data = Buffer.alloc(9);
+  data.writeUInt8(3, 0); // Transfer instruction index
+  data.writeBigUInt64LE(amount, 1);
+  return new TransactionInstruction({
+    programId: TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: from, isSigner: false, isWritable: true },
+      { pubkey: to, isSigner: false, isWritable: true },
+      { pubkey: authority, isSigner: true, isWritable: false },
+    ],
+    data,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getAta(mint: PublicKey, owner: PublicKey): PublicKey {
+  const [ata] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  );
+  return ata;
+}
+
+function buildCreateAtaIx(
+  payer: PublicKey,
+  ata: PublicKey,
+  owner: PublicKey,
+  mint: PublicKey,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: ata, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.alloc(0),
+  });
+}
+
+function loadCrankKeypair(): Keypair {
+  const inlineJson = process.env.CRANK_KEYPAIR_JSON;
+  if (inlineJson) {
+    const raw = JSON.parse(inlineJson);
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
+
+  const walletPath = process.env.ANCHOR_WALLET;
+  if (!walletPath) {
+    throw new Error("ANCHOR_WALLET or CRANK_KEYPAIR_JSON env var is required");
+  }
+  const resolved = walletPath.startsWith("~/")
+    ? path.join(process.env.HOME ?? "", walletPath.slice(2))
+    : walletPath;
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`Crank keypair file not found at ${resolved}`);
+  }
+  const raw = JSON.parse(fs.readFileSync(resolved, "utf-8"));
+  return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
