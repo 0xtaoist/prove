@@ -106,3 +106,53 @@ export async function registerCreator(
     throw new Error(`registerCreator failed (${res.status})`);
   }
 }
+
+/**
+ * Upload token metadata (name, description, image) to the indexer.
+ * Returns the metadata URI to use in the on-chain Metaplex metadata.
+ */
+export async function uploadTokenMetadata(
+  input: {
+    mint: string;
+    name: string;
+    description: string;
+    image: File | null;
+  },
+  accessToken: string | null,
+): Promise<string> {
+  let imageData: string | null = null;
+
+  if (input.image) {
+    // Convert File to base64 data URI
+    const buffer = await input.image.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ""),
+    );
+    imageData = `data:${input.image.type};base64,${base64}`;
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+
+  const res = await fetch(`${BASE_URL}/api/metadata/upload`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      mint: input.mint,
+      name: input.name,
+      description: input.description,
+      image: imageData,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`uploadTokenMetadata failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return data.metadataUri;
+}

@@ -14,21 +14,26 @@ export function useAuction() {
   const { activeKey: publicKey, sendTransaction, loading, error, signature } = useTransaction();
 
   const createAuction = useCallback(
-    async (ticker: string, totalSupply: number) => {
+    async (
+      ticker: string,
+      totalSupply: number,
+      tokenName?: string,
+      metadataUri?: string,
+      mintKeypair?: Keypair,
+    ) => {
       if (!publicKey) return null;
 
-      // Generate a new mint keypair for the auction token.
-      const mint = Keypair.generate();
+      const mint = mintKeypair ?? Keypair.generate();
 
       const tx = await buildCreateAuctionTx(
         publicKey,
         ticker,
         totalSupply,
         mint.publicKey,
+        tokenName,
+        metadataUri,
       );
 
-      // Pass mint as extra signer — sendTransaction will partialSign
-      // after setting the blockhash
       return sendTransaction(tx, [mint]);
     },
     [publicKey, sendTransaction],

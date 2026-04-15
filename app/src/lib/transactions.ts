@@ -157,6 +157,8 @@ export async function buildCreateAuctionTx(
   ticker: string,
   totalSupply: number,
   mint: PublicKey,
+  tokenName?: string,
+  metadataUri?: string,
 ): Promise<Transaction> {
   const [auctionPDA] = getAuctionPDA(mint);
   const [configPDA] = getConfigPDA();
@@ -239,9 +241,9 @@ export async function buildCreateAuctionTx(
     creator,      // mint authority (temporary)
     creator,      // payer
     creator,      // update authority
-    ticker,       // name (will be the ticker for now)
-    ticker,       // symbol
-    "",           // URI (can be updated later)
+    tokenName ?? ticker,  // name
+    ticker,               // symbol
+    metadataUri ?? "",     // URI to JSON metadata
   );
 
   // Transfer mint authority from creator to auction PDA

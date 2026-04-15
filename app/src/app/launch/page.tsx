@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuction } from "../../hooks/useAuction";
 import { useTransaction } from "../../hooks/useTransaction";
 import { usePrivyWallet } from "../../hooks/usePrivyWallet";
-import { registerCreator } from "../../lib/api";
+import { registerCreator, uploadTokenMetadata } from "../../lib/api";
+import { Keypair } from "@solana/web3.js";
 
 interface FormData {
   ticker: string;
@@ -362,28 +363,46 @@ export default function LaunchPage() {
                       await login();
                       return;
                     }
-                    // Persist the creator <> Privy mapping BEFORE sending the
-                    // on-chain tx so the indexer already has the row when
-                    // AuctionCreated lands. If this fails, abort — sending
-                    // the on-chain tx without an indexer row causes FK errors.
                     try {
                       const token = await getAccessToken();
+
+                      // 1. Register creator
                       await registerCreator({
                         wallet: publicKey.toBase58(),
                       }, token);
-                    } catch (err) {
-                      console.error("[launch] registerCreator failed", err);
-                      setErrors({ ticker: "Failed to register creator. Please try again." });
+
+                      // 2. Generate mint keypair for metadata upload
+                      const mintKeypair = Keypair.generate();
+
+                      // 3. Upload image + metadata to indexer
+                      let metadataUri: string | undefined;
+                      try {
+                        metadataUri = await uploadTokenMetadata({
+                          mint: mintKeypair.publicKey.toBase58(),
+                          name: form.name,
+                          description: form.description,
+                          image: form.image,
+                        }, token);
+                      } catch (err) {
+                        console.warn("[launch] metadata upload failed, continuing without:", err);
+                      }
+
+                      // 4. Create auction on-chain (pass the same mint keypair)
+                      const sig = await createAuction(
+                        form.ticker,
+                        Number(form.totalSupply),
+                        form.name,
+                        metadataUri,
+                        mintKeypair,
+                      );
                       setShowModal(false);
-                      return;
-                    }
-                    const sig = await createAuction(
-                      form.ticker,
-                      Number(form.totalSupply),
-                    );
-                    setShowModal(false);
-                    if (sig) {
-                      alert(`Auction created! Signature: ${sig}`);
+                      if (sig) {
+                        alert(`Auction created! Signature: ${sig}`);
+                      }
+                    } catch (err) {
+                      console.error("[launch] launch failed", err);
+                      setErrors({ ticker: "Launch failed. Please try again." });
+                      setShowModal(false);
                     }
                   }}
                 >

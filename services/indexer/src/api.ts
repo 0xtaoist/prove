@@ -411,4 +411,157 @@ router.get("/api/quests/:mint", async (req: Request, res: Response) => {
   }
 });
 
+// ─── POST /api/metadata/upload ──────────────────────────────
+// Upload token image + metadata before creating the on-chain auction.
+// Stores image as base64 in the Auction row (created by the listener
+// or pre-created here). Returns the metadata URI for on-chain use.
+router.post("/api/metadata/upload", requirePrivyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { mint, name, description, image } = req.body as {
+      mint?: string;
+      name?: string;
+      description?: string;
+      image?: string; // base64-encoded image data with data URI prefix
+    };
+
+    if (!mint || !isValidSolanaAddress(mint)) {
+      res.status(400).json(errorResponse("Invalid or missing 'mint'"));
+      return;
+    }
+    if (!name || name.length > 50) {
+      res.status(400).json(errorResponse("Invalid name"));
+      return;
+    }
+
+    // Validate image size (max 500KB base64 ≈ 375KB binary)
+    if (image && image.length > 700_000) {
+      res.status(400).json(errorResponse("Image too large (max 500KB)"));
+      return;
+    }
+
+    // Upsert: the auction may not exist yet (created on-chain after this call)
+    // Store metadata so the listener can pick it up, or the metadata endpoint can serve it
+    await prisma.auction.upsert({
+      where: { mint },
+      create: {
+        mint,
+        ticker: name.toUpperCase().slice(0, 10),
+        creator: req.privyUserId ?? "unknown",
+        startTime: new Date(),
+        endTime: new Date(Date.now() + 900_000),
+        totalSupply: BigInt(0),
+        tokenName: name,
+        tokenImage: image ?? null,
+        description: description ?? null,
+        state: "GATHERING",
+      },
+      update: {
+        tokenName: name,
+        tokenImage: image ?? undefined,
+        description: description ?? undefined,
+      },
+    });
+
+    const baseUrl = process.env.APP_ORIGIN ?? `http://localhost:${process.env.INDEXER_PORT ?? 4000}`;
+    const metadataUri = `${baseUrl.replace('https://proveit.fun', 'https://proveindexer-production.up.railway.app')}/api/metadata/${mint}.json`;
+
+    res.json({ ok: true, metadataUri });
+  } catch (err) {
+    console.error("[api] POST /api/metadata/upload error:", err);
+    res.status(500).json(errorResponse("Internal server error"));
+  }
+});
+
+// ─── GET /api/metadata/:mint.json ──────────────────────────
+// Serves Metaplex-compatible JSON metadata for a token.
+router.get("/api/metadata/:mintJson", async (req: Request, res: Response) => {
+  try {
+    const mintJson = req.params.mintJson;
+    const mint = mintJson.replace(/\.json$/, "");
+    if (!isValidSolanaAddress(mint)) {
+      res.status(400).json(errorResponse("Invalid mint"));
+      return;
+    }
+
+    const auction = await prisma.auction.findUnique({
+      where: { mint },
+      select: { ticker: true, tokenName: true, tokenImage: true, description: true },
+    });
+
+    if (!auction) {
+      res.status(404).json(errorResponse("Token not found"));
+      return;
+    }
+
+    const baseUrl = process.env.APP_ORIGIN ?? `http://localhost:${process.env.INDEXER_PORT ?? 4000}`;
+    const imageUrl = auction.tokenImage
+      ? `${baseUrl.replace('https://proveit.fun', 'https://proveindexer-production.up.railway.app')}/api/metadata/${mint}/image`
+      : null;
+
+    const metadata = {
+      name: auction.tokenName ?? auction.ticker,
+      symbol: auction.ticker,
+      description: auction.description ?? `${auction.ticker} — launched on Prove`,
+      image: imageUrl,
+      external_url: `https://proveit.fun/token/${mint}`,
+      attributes: [],
+      properties: {
+        category: "fungible",
+        creators: [],
+      },
+    };
+
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json(metadata);
+  } catch (err) {
+    console.error("[api] GET /api/metadata/:mint.json error:", err);
+    res.status(500).json(errorResponse("Internal server error"));
+  }
+});
+
+// ─── GET /api/metadata/:mint/image ──────────────────────────
+// Serves the token image from base64 stored in the DB.
+router.get("/api/metadata/:mint/image", async (req: Request, res: Response) => {
+  try {
+    const mint = req.params.mint;
+    if (!isValidSolanaAddress(mint)) {
+      res.status(400).json(errorResponse("Invalid mint"));
+      return;
+    }
+
+    const auction = await prisma.auction.findUnique({
+      where: { mint },
+      select: { tokenImage: true },
+    });
+
+    if (!auction?.tokenImage) {
+      res.status(404).json(errorResponse("Image not found"));
+      return;
+    }
+
+    // Parse data URI: "data:image/png;base64,iVBOR..."
+    const match = auction.tokenImage.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      // If it's a URL, redirect
+      if (auction.tokenImage.startsWith("http")) {
+        res.redirect(auction.tokenImage);
+        return;
+      }
+      res.status(400).json(errorResponse("Invalid image format"));
+      return;
+    }
+
+    const contentType = match[1];
+    const imageBuffer = Buffer.from(match[2], "base64");
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(imageBuffer);
+  } catch (err) {
+    console.error("[api] GET /api/metadata/:mint/image error:", err);
+    res.status(500).json(errorResponse("Internal server error"));
+  }
+});
+
 export default router;
