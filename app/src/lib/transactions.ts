@@ -167,7 +167,8 @@ export async function buildCreateAuctionTx(
   });
 
   const tx = new Transaction()
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }))
+    .add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }))
     .add(createMintAccountIx)
     .add(initMintIx)
     .add(createAuctionIx)
