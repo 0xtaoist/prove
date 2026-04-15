@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { useTransaction } from "./useTransaction";
 import {
@@ -12,16 +11,13 @@ import {
 } from "../lib/transactions";
 
 export function useAuction() {
-  const { publicKey } = useWallet();
-  const { sendTransaction, loading, error, signature } = useTransaction();
+  const { activeKey: publicKey, sendTransaction, loading, error, signature } = useTransaction();
 
   const createAuction = useCallback(
     async (ticker: string, totalSupply: number) => {
       if (!publicKey) return null;
 
       // Generate a new mint keypair for the auction token.
-      // In production the mint may be created by the program or passed in;
-      // for now we generate one client-side so the PDA derivation works.
       const mint = Keypair.generate();
 
       const tx = await buildCreateAuctionTx(

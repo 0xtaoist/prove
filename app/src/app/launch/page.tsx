@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuction } from "../../hooks/useAuction";
+import { useTransaction } from "../../hooks/useTransaction";
 import { usePrivyWallet } from "../../hooks/usePrivyWallet";
 import { registerCreator } from "../../lib/api";
 
@@ -27,8 +28,9 @@ const TICKER_RE = /^[A-Z0-9]{1,10}$/;
 const STAKE_AMOUNT = 2;
 
 export default function LaunchPage() {
-  const { publicKey, connected } = useWallet();
   const { connection } = useConnection();
+  const { activeKey: publicKey } = useTransaction();
+  const connected = !!publicKey;
   const { authenticated, login, getAccessToken } = usePrivyWallet();
   const { createAuction, loading: auctionLoading, error: auctionError, signature: auctionSig } = useAuction();
   const [balance, setBalance] = useState<number | null>(null);
@@ -264,11 +266,11 @@ export default function LaunchPage() {
         <button
           type="submit"
           className="btn-primary w-full py-4 text-base"
-          disabled={(!connected && !authenticated) || auctionLoading}
+          disabled={!connected || auctionLoading}
         >
           {auctionLoading
             ? "Sending Transaction..."
-            : connected || authenticated
+            : connected
               ? `Launch \u2014 Pay ${STAKE_AMOUNT} SOL Stake`
               : "Connect Wallet to Launch"}
         </button>

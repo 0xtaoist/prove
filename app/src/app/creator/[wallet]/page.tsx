@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useTransaction } from "../../../hooks/useTransaction";
+import { usePrivyWallet } from "../../../hooks/usePrivyWallet";
 import { motion } from "framer-motion";
 import { Reveal } from "@/components/motion";
 
@@ -80,7 +80,9 @@ const STAKE_COLORS: Record<string, string> = {
 
 export default function CreatorPage() {
   const { wallet } = useParams<{ wallet: string }>();
-  const { connected } = useWallet();
+  const { activeKey } = useTransaction();
+  const { login } = usePrivyWallet();
+  const connected = !!activeKey;
   const [withdrawing, setWithdrawing] = useState(false);
 
   if (!BASE58_RE.test(wallet)) {
@@ -97,7 +99,9 @@ export default function CreatorPage() {
         <p className="text-foreground-muted">
           Connect your wallet to view the creator dashboard.
         </p>
-        <WalletMultiButton />
+        <button className="btn-primary" onClick={login}>
+          Connect Wallet
+        </button>
       </div>
     );
   }

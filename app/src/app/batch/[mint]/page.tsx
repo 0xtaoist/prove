@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import { motion } from "framer-motion";
 import { Reveal } from "@/components/motion";
+import { useTransaction } from "../../../hooks/useTransaction";
+import { useAuction } from "../../../hooks/useAuction";
 
 type AuctionState = "Gathering" | "Succeeded" | "Failed";
 
@@ -47,7 +49,9 @@ const STATE_BADGE: Record<AuctionState, { label: string; className: string }> = 
 export default function BatchAuctionPage() {
   const params = useParams<{ mint: string }>();
   const mint = params.mint;
-  const { connected } = useWallet();
+  const { activeKey } = useTransaction();
+  const connected = !!activeKey;
+  const { commitSol, claimTokens, refund, loading: txLoading, error: txError } = useAuction();
 
   const [auction, setAuction] = useState<AuctionData | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -101,17 +105,24 @@ export default function BatchAuctionPage() {
     return () => clearInterval(interval);
   }, [auction]);
 
-  const handleCommit = () => {
+  const handleCommit = async () => {
     const amount = parseFloat(commitAmount);
     if (isNaN(amount) || amount < MIN_COMMITMENT_SOL) {
       alert(`Minimum commitment is ${MIN_COMMITMENT_SOL} SOL`);
       return;
     }
-    alert(`Would commit ${amount} SOL to auction ${mint}`);
+    const sig = await commitSol(new PublicKey(mint), amount);
+    if (sig) {
+      setCommitAmount("");
+      fetchAuction();
+    }
   };
 
-  const handleRefund = () => {
-    alert(`Would request refund for auction ${mint}`);
+  const handleRefund = async () => {
+    const sig = await refund(new PublicKey(mint));
+    if (sig) {
+      fetchAuction();
+    }
   };
 
   if (loading) {
@@ -245,10 +256,10 @@ export default function BatchAuctionPage() {
               />
               <button
                 className="btn-primary whitespace-nowrap"
-                disabled={!connected}
+                disabled={!connected || txLoading}
                 onClick={handleCommit}
               >
-                {connected ? "Commit" : "Connect Wallet"}
+                {txLoading ? "Sending..." : connected ? "Commit" : "Connect Wallet"}
               </button>
             </div>
             <p className="text-xs text-foreground-muted">
@@ -291,10 +302,10 @@ export default function BatchAuctionPage() {
             </p>
             <button
               className="btn-primary"
-              disabled={!connected}
+              disabled={!connected || txLoading}
               onClick={handleRefund}
             >
-              {connected ? "Claim Refund" : "Connect Wallet to Refund"}
+              {txLoading ? "Processing..." : connected ? "Claim Refund" : "Connect Wallet to Refund"}
             </button>
           </div>
         </Reveal>
