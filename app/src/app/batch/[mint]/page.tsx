@@ -279,12 +279,21 @@ export default function BatchAuctionPage() {
             <h2 className="text-xl font-bold text-success mb-3">
               Auction Succeeded
             </h2>
-            <p className="text-foreground-muted">
+            <p className="text-foreground-muted mb-6">
               ${auction.ticker} launched successfully with{" "}
               {auction.participants} participants and{" "}
-              {formatSol(auction.solCommitted)} SOL committed. Tokens have been
-              distributed to all participants.
+              {formatSol(auction.solCommitted)} SOL committed.
             </p>
+            <button
+              className="btn-primary"
+              disabled={!connected || txLoading}
+              onClick={async () => {
+                const sig = await claimTokens(new PublicKey(mint));
+                if (sig) fetchAuction();
+              }}
+            >
+              {txLoading ? "Processing..." : connected ? "Claim Tokens" : "Connect Wallet to Claim"}
+            </button>
           </div>
         </Reveal>
       )}
@@ -309,6 +318,11 @@ export default function BatchAuctionPage() {
             </button>
           </div>
         </Reveal>
+      )}
+
+      {/* Transaction error */}
+      {txError && (
+        <p className="text-xs text-danger mt-4 text-center">{txError}</p>
       )}
     </div>
   );

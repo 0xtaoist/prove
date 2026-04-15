@@ -31,17 +31,8 @@ export default function LaunchPage() {
   const { connection } = useConnection();
   const { activeKey: publicKey } = useTransaction();
   const connected = !!publicKey;
-  const { authenticated, login, getAccessToken, address } = usePrivyWallet();
+  const { authenticated, login, getAccessToken } = usePrivyWallet();
 
-  // Debug wallet state in console
-  if (typeof window !== "undefined") {
-    console.log("[launch] wallet state:", {
-      activeKey: publicKey?.toBase58() ?? null,
-      privyAuthenticated: authenticated,
-      privyAddress: address,
-      connected,
-    });
-  }
   const { createAuction, loading: auctionLoading, error: auctionError, signature: auctionSig } = useAuction();
   const [balance, setBalance] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>({
@@ -89,6 +80,9 @@ export default function LaunchPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const errs = validate();
+    if (balance !== null && balance < STAKE_AMOUNT + 0.01) {
+      errs.ticker = `Insufficient balance. You need at least ${STAKE_AMOUNT + 0.01} SOL (stake + fees).`;
+    }
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
     setShowModal(true);
