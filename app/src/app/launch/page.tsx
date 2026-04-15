@@ -74,6 +74,8 @@ export default function LaunchPage() {
       errs.totalSupply = "Enter a valid positive number";
     } else if (!Number.isInteger(supply)) {
       errs.totalSupply = "Supply must be a whole number";
+    } else if (supply > 18_000_000_000_000) {
+      errs.totalSupply = "Maximum supply is 18 trillion";
     }
     return errs;
   }, [form]);
@@ -399,9 +401,10 @@ export default function LaunchPage() {
                       if (sig) {
                         alert(`Auction created! Signature: ${sig}`);
                       }
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error("[launch] launch failed", err);
-                      setErrors({ ticker: "Launch failed. Please try again." });
+                      const msg = err?.message ?? String(err);
+                      setErrors({ ticker: `Launch failed: ${msg.slice(0, 150)}` });
                       setShowModal(false);
                     }
                   }}

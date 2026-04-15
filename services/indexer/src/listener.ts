@@ -34,7 +34,7 @@ function resolveProgramIds():
 }
 
 // Polling config
-const POLL_INTERVAL_MS = 5_000; // 5 seconds
+const POLL_INTERVAL_MS = 15_000; // 15 seconds (avoid Helius rate limits)
 const lastSignatures: Record<ProgramName, string | undefined> = {
   BatchAuction: undefined,
   FeeRouter: undefined,

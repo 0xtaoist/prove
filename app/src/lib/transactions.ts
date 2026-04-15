@@ -25,7 +25,7 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const TOKEN_DECIMALS = 9;
+const TOKEN_DECIMALS = 6;
 const METAPLEX_PROGRAM_ID = new PublicKey(
   "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
 );
