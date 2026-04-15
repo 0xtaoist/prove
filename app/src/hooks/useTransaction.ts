@@ -4,10 +4,10 @@ import { useState, useCallback, useMemo } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSolanaWallets } from "@privy-io/react-auth/solana";
-import { PublicKey, type Transaction } from "@solana/web3.js";
+import { PublicKey, Keypair, type Transaction } from "@solana/web3.js";
 
 export interface UseTransactionReturn {
-  sendTransaction: (tx: Transaction) => Promise<string | null>;
+  sendTransaction: (tx: Transaction, extraSigners?: Keypair[]) => Promise<string | null>;
   loading: boolean;
   error: string | null;
   signature: string | null;
@@ -50,7 +50,7 @@ export function useTransaction(): UseTransactionReturn {
   const activeKey = publicKey ?? privyKey;
 
   const sendTransaction = useCallback(
-    async (tx: Transaction): Promise<string | null> => {
+    async (tx: Transaction, extraSigners?: Keypair[]): Promise<string | null> => {
       setError(null);
       setSignature(null);
 
@@ -65,6 +65,11 @@ export function useTransaction(): UseTransactionReturn {
         tx.recentBlockhash = (
           await connection.getLatestBlockhash()
         ).blockhash;
+
+        // Sign with any extra keypairs (e.g. mint keypair) AFTER blockhash is set
+        if (extraSigners?.length) {
+          tx.partialSign(...extraSigners);
+        }
 
         let sig: string;
 

@@ -27,10 +27,9 @@ export function useAuction() {
         mint.publicKey,
       );
 
-      // The mint keypair needs to sign the transaction as well
-      tx.partialSign(mint);
-
-      return sendTransaction(tx);
+      // Pass mint as extra signer — sendTransaction will partialSign
+      // after setting the blockhash
+      return sendTransaction(tx, [mint]);
     },
     [publicKey, sendTransaction],
   );

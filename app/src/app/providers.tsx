@@ -6,10 +6,6 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
@@ -28,13 +24,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const solanaConnectors = useMemo(() => toSolanaWalletConnectors(), []);
 
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter({ network }),
-    ],
-    [network],
-  );
+  // Phantom registers as a Standard Wallet automatically — no adapter needed.
+  // Privy's toSolanaWalletConnectors() handles wallet injection.
+  const wallets = useMemo(() => [], []);
 
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
