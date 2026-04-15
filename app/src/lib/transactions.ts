@@ -2,6 +2,7 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
+  SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
@@ -93,6 +94,40 @@ export async function buildCreateAuctionTx(
   const [stakePDA] = getStakePDA(mint);
   const [stakeVaultPDA] = getStakeVaultPDA();
 
+  // --- Instruction 0: Create the mint account ---
+  // The mint must exist before create_auction, with:
+  //   - mint authority = auction PDA
+  //   - supply = 0
+  //   - decimals = 0 (whole tokens)
+  const MINT_SIZE = 82; // SPL Token Mint account size
+  const mintRentLamports = 1461600; // Rent-exempt for 82 bytes
+
+  const createMintAccountIx = SystemProgram.createAccount({
+    fromPubkey: creator,
+    newAccountPubkey: mint,
+    lamports: mintRentLamports,
+    space: MINT_SIZE,
+    programId: TOKEN_PROGRAM_ID,
+  });
+
+  // InitializeMint instruction (SPL Token instruction index 0)
+  // Layout: [0(u8), decimals(u8), mintAuthority(32), freezeOption(u8), freezeAuthority(32)]
+  const initMintData = Buffer.alloc(67);
+  initMintData.writeUInt8(0, 0);  // instruction index: InitializeMint
+  initMintData.writeUInt8(0, 1);  // decimals = 0
+  auctionPDA.toBuffer().copy(initMintData, 2);  // mint authority = auction PDA
+  initMintData.writeUInt8(0, 34); // no freeze authority
+  // 35 bytes of zeros for freeze authority (ignored when option = 0)
+
+  const initMintIx = new TransactionInstruction({
+    programId: TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: RENT_SYSVAR, isSigner: false, isWritable: false },
+    ],
+    data: initMintData,
+  });
+
   // --- Instruction 1: batch_auction::create_auction ---
   const createAuctionData = Buffer.concat([
     await anchorDiscriminator("create_auction"),
@@ -130,7 +165,11 @@ export async function buildCreateAuctionTx(
     data: depositStakeData,
   });
 
-  const tx = new Transaction().add(createAuctionIx).add(depositStakeIx);
+  const tx = new Transaction()
+    .add(createMintAccountIx)
+    .add(initMintIx)
+    .add(createAuctionIx)
+    .add(depositStakeIx);
   return tx;
 }
 
